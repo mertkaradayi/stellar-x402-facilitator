@@ -4,14 +4,14 @@ export interface PaymentRequirements {
   scheme: "exact";
   network: "stellar-testnet" | "stellar";
   maxAmountRequired: string;
-  asset: string;
+  resource: string;
+  description: string;
+  mimeType: string;
+  outputSchema?: object | null; // Only this field is optional per spec
   payTo: string;
-  resource?: string;
-  description?: string;
-  mimeType?: string;
-  maxTimeoutSeconds?: number;
-  outputSchema?: object | null;
-  extra?: object | null;
+  maxTimeoutSeconds: number;
+  asset: string;
+  extra: object | null; // Required but can be null
 }
 
 export interface StellarPayload {

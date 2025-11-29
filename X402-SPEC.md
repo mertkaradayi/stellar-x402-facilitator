@@ -22,19 +22,21 @@ When a resource requires payment, the server returns HTTP 402 with this body:
 
 ## 2. PaymentRequirements Object
 
+All fields are **required** except `outputSchema` which is optional.
+
 ```typescript
 {
-  scheme: string;                    // e.g. "exact"
-  network: string;                   // e.g. "base-sepolia", "stellar-testnet"
-  maxAmountRequired: string;         // uint256 as string, atomic units
-  resource: string;                  // URL of resource
-  description: string;               // Human-readable description
-  mimeType: string;                  // Response MIME type
-  outputSchema?: object | null;      // Optional JSON schema
-  payTo: string;                     // Recipient address
-  maxTimeoutSeconds: number;         // Max response time
-  asset: string;                     // Token contract address
-  extra: object | null;              // Scheme-specific data
+  scheme: string;                    // REQUIRED - e.g. "exact"
+  network: string;                   // REQUIRED - e.g. "base-sepolia", "stellar-testnet"
+  maxAmountRequired: string;         // REQUIRED - uint256 as string, atomic units
+  resource: string;                  // REQUIRED - URL of resource
+  description: string;               // REQUIRED - Human-readable description
+  mimeType: string;                  // REQUIRED - Response MIME type
+  outputSchema?: object | null;      // OPTIONAL - JSON schema (only optional field)
+  payTo: string;                     // REQUIRED - Recipient address
+  maxTimeoutSeconds: number;         // REQUIRED - Max response time
+  asset: string;                     // REQUIRED - Token contract address
+  extra: object | null;              // REQUIRED - Scheme-specific data (can be null)
 }
 ```
 
@@ -138,7 +140,7 @@ The spec does not define the exact shape, but typical usage:
 | Component | Required Fields | Notes |
 |-----------|-----------------|-------|
 | 402 Response | `x402Version`, `accepts`, `error` | |
-| PaymentRequirements | All fields listed above | `extra` can be null |
+| PaymentRequirements | All fields listed above | `outputSchema` optional, `extra` can be null |
 | X-PAYMENT | `x402Version`, `scheme`, `network`, `payload` | Base64 encoded |
 | POST /verify request | `x402Version`, `paymentHeader`, `paymentRequirements` | |
 | POST /verify response | `isValid`, `invalidReason` | **Only these 2 fields** |
