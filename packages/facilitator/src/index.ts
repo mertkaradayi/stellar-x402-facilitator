@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { verifyRoute } from "./routes/verify.js";
 import { settleRoute } from "./routes/settle.js";
+import { SUPPORTED_KINDS } from "./types.js";
 
 const app = express();
 const PORT = process.env.PORT || 4022;
@@ -14,15 +15,20 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "x402-stellar-facilitator" });
 });
 
+// x402 /supported endpoint - declares supported (scheme, network) combinations
+app.get("/supported", (_req, res) => {
+  res.json({
+    kinds: SUPPORTED_KINDS.map(k => ({ scheme: k.scheme, network: k.network }))
+  });
+});
+
 // x402 facilitator endpoints
 app.post("/verify", verifyRoute);
 app.post("/settle", settleRoute);
 
 app.listen(PORT, () => {
   console.log(`🚀 x402 Stellar Facilitator running on http://localhost:${PORT}`);
-  console.log(`   POST /verify  - Verify payment`);
-  console.log(`   POST /settle  - Settle payment`);
+  console.log(`   GET  /supported - List supported schemes/networks`);
+  console.log(`   POST /verify    - Verify payment`);
+  console.log(`   POST /settle    - Settle payment`);
 });
-
-
-

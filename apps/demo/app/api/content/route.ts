@@ -4,10 +4,10 @@ const FACILITATOR_URL = process.env.FACILITATOR_URL || "http://localhost:4022";
 
 // Configuration for payment requirements
 const PAYMENT_CONFIG = {
-  payTo: process.env.PAY_TO_ADDRESS || "GC63PSERYMUUUJKYSSFQ7FKRAU5UPIP3XUC6X7DLMZUB7SSCPW5BSIRT", // Your testnet address
-  asset: process.env.ASSET_CONTRACT || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC", // Testnet USDC
+  payTo: process.env.PAY_TO_ADDRESS || "GC63PSERYMUUUJKYSSFQ7FKRAU5UPIP3XUC6X7DLMZUB7SSCPW5BSIRT",
+  asset: process.env.ASSET_CONTRACT || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
   maxAmountRequired: "100000", // 0.1 USDC (6 decimals) - small amount for testing
-  network: "stellar-testnet",
+  network: "stellar-testnet" as const,
 };
 
 // The premium content (revealed after payment)
@@ -22,6 +22,21 @@ This content was protected by a Stellar-native payment gateway. The transaction 
 You're now part of the future of internet payments!
 `.trim();
 
+// Reusable payment requirements object
+const paymentRequirements = {
+  scheme: "exact" as const,
+  network: PAYMENT_CONFIG.network,
+  maxAmountRequired: PAYMENT_CONFIG.maxAmountRequired,
+  asset: PAYMENT_CONFIG.asset,
+  payTo: PAYMENT_CONFIG.payTo,
+  resource: "/api/content",
+  description: "Premium content access",
+  mimeType: "application/json",
+  maxTimeoutSeconds: 300,
+  outputSchema: null,
+  extra: null,
+};
+
 export async function GET(request: NextRequest) {
   const xPaymentHeader = request.headers.get("X-PAYMENT");
 
@@ -31,50 +46,21 @@ export async function GET(request: NextRequest) {
       {
         x402Version: 1,
         error: "X-PAYMENT header is required",
-        accepts: [
-          {
-            scheme: "exact",
-            network: PAYMENT_CONFIG.network,
-            maxAmountRequired: PAYMENT_CONFIG.maxAmountRequired,
-            asset: PAYMENT_CONFIG.asset,
-            payTo: PAYMENT_CONFIG.payTo,
-            resource: "/api/content",
-            description: "Premium content access",
-            mimeType: "application/json",
-            maxTimeoutSeconds: 300,
-            outputSchema: null,
-            extra: null,
-          },
-        ],
+        accepts: [paymentRequirements],
       },
       { status: 402 }
     );
   }
 
-  // Decode the payment header
-  let paymentPayload;
-  try {
-    paymentPayload = JSON.parse(atob(xPaymentHeader));
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid X-PAYMENT header format" },
-      { status: 400 }
-    );
-  }
-
   // Call facilitator to verify
+  // x402 spec: send paymentHeader as the raw header string (base64)
   const verifyResponse = await fetch(`${FACILITATOR_URL}/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      paymentPayload,
-      paymentRequirements: {
-        scheme: "exact",
-        network: PAYMENT_CONFIG.network,
-        maxAmountRequired: PAYMENT_CONFIG.maxAmountRequired,
-        asset: PAYMENT_CONFIG.asset,
-        payTo: PAYMENT_CONFIG.payTo,
-      },
+      x402Version: 1,
+      paymentHeader: xPaymentHeader, // Raw X-PAYMENT header string
+      paymentRequirements,
     }),
   });
 
@@ -85,37 +71,21 @@ export async function GET(request: NextRequest) {
       {
         x402Version: 1,
         error: verifyResult.invalidReason || "Payment verification failed",
-        accepts: [
-          {
-            scheme: "exact",
-            network: PAYMENT_CONFIG.network,
-            maxAmountRequired: PAYMENT_CONFIG.maxAmountRequired,
-            asset: PAYMENT_CONFIG.asset,
-            payTo: PAYMENT_CONFIG.payTo,
-            resource: "/api/content",
-            description: "Premium content access",
-            mimeType: "application/json",
-            maxTimeoutSeconds: 300,
-          },
-        ],
+        accepts: [paymentRequirements],
       },
       { status: 402 }
     );
   }
 
   // Call facilitator to settle
+  // x402 spec: send paymentHeader as the raw header string (base64)
   const settleResponse = await fetch(`${FACILITATOR_URL}/settle`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      paymentPayload,
-      paymentRequirements: {
-        scheme: "exact",
-        network: PAYMENT_CONFIG.network,
-        maxAmountRequired: PAYMENT_CONFIG.maxAmountRequired,
-        asset: PAYMENT_CONFIG.asset,
-        payTo: PAYMENT_CONFIG.payTo,
-      },
+      x402Version: 1,
+      paymentHeader: xPaymentHeader, // Raw X-PAYMENT header string
+      paymentRequirements,
     }),
   });
 
@@ -128,13 +98,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Payment successful! Return the content
+  // Payment successful! Return the content with X-PAYMENT-RESPONSE header
   const paymentResponse = btoa(
     JSON.stringify({
       success: true,
-      transaction: settleResult.transaction,
-      network: settleResult.network,
-      payer: settleResult.payer,
+      txHash: settleResult.txHash,
+      networkId: settleResult.networkId,
     })
   );
 
@@ -149,4 +118,3 @@ export async function GET(request: NextRequest) {
     }
   );
 }
-

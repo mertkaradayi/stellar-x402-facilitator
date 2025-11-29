@@ -61,9 +61,10 @@ This implementation follows the [Coinbase x402 specification](https://github.com
 | X-PAYMENT-RESPONSE Header | ✅ |
 | Facilitator /verify | ✅ |
 | Facilitator /settle | ✅ |
+| Facilitator /supported | ✅ |
 | Base64 Encoding | ✅ |
 
-See [COMPATIBILITY.md](./COMPATIBILITY.md) for full details.
+See [COMPATIBILITY.md](./COMPATIBILITY.md) and [X402-SPEC.md](./X402-SPEC.md) for full details.
 
 ## Project Structure
 
@@ -88,6 +89,7 @@ stellar-x402-facilitator/
 │       │   └── api/content/   # Protected endpoint (returns 402)
 │       └── lib/
 │           └── x402.ts        # Client x402 helpers
+├── X402-SPEC.md               # x402 spec reference
 ├── COMPATIBILITY.md           # x402 spec compliance details
 └── README.md
 ```
@@ -99,33 +101,39 @@ stellar-x402-facilitator/
 #### `GET /health`
 Health check endpoint.
 
+#### `GET /supported`
+List supported (scheme, network) combinations.
+
+```json
+// Response
+{
+  "kinds": [
+    { "scheme": "exact", "network": "stellar-testnet" }
+  ]
+}
+```
+
 #### `POST /verify`
 Verify a payment authorization.
 
 ```json
 // Request
 {
-  "paymentPayload": {
-    "x402Version": 1,
+  "x402Version": 1,
+  "paymentHeader": "<raw X-PAYMENT header string (base64)>",
+  "paymentRequirements": {
     "scheme": "exact",
     "network": "stellar-testnet",
-    "payload": {
-      "signedTxXdr": "AAAA...",
-      "sourceAccount": "G...",
-      "amount": "100000",
-      "destination": "G...",
-      "asset": "C...",
-      "validUntilLedger": 12345678,
-      "nonce": "abc123"
-    }
-  },
-  "paymentRequirements": { ... }
+    "maxAmountRequired": "100000",
+    "asset": "C...",
+    "payTo": "G..."
+  }
 }
 
 // Response
 {
   "isValid": true,
-  "payer": "G..."
+  "invalidReason": null
 }
 ```
 
@@ -133,14 +141,23 @@ Verify a payment authorization.
 Execute a verified payment on the Stellar network.
 
 ```json
+// Request (same as /verify)
+{
+  "x402Version": 1,
+  "paymentHeader": "<raw X-PAYMENT header string (base64)>",
+  "paymentRequirements": { ... }
+}
+
 // Response
 {
   "success": true,
-  "transaction": "abc123def456...",
-  "network": "stellar-testnet",
-  "payer": "G..."
+  "error": null,
+  "txHash": "abc123def456...",
+  "networkId": "stellar-testnet"
 }
 ```
+
+> Note: `paymentHeader` is the raw X-PAYMENT header string (base64 encoded). The facilitator decodes it internally.
 
 ## x402 Headers
 
@@ -182,6 +199,10 @@ curl http://localhost:3000/api/content
 # Test facilitator health
 curl http://localhost:4022/health
 # → {"status":"ok","service":"x402-stellar-facilitator"}
+
+# Test supported schemes
+curl http://localhost:4022/supported
+# → {"kinds":[{"scheme":"exact","network":"stellar-testnet"}]}
 ```
 
 ## Future Enhancements
@@ -190,7 +211,6 @@ curl http://localhost:4022/health
 |---------|--------|
 | USDC Soroban Token Support | ⏳ Using native XLM for now |
 | Fee Sponsorship (Fee-bump) | ⏳ Planned |
-| `/supported` endpoint | ⏳ Optional per spec |
 | Production deployment | ⏳ Ready when needed |
 
 ## Resources

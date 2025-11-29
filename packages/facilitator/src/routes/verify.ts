@@ -1,31 +1,55 @@
 import type { Request, Response } from "express";
-import type { PaymentPayload, PaymentRequirements, VerifyResponse } from "../types.js";
+import type { FacilitatorRequest, VerifyResponse } from "../types.js";
+import { decodeAndValidatePaymentHeader } from "../types.js";
 import { verifyStellarPayment } from "../stellar/verify.js";
 
-export interface VerifyRequest {
-  paymentPayload: PaymentPayload;
-  paymentRequirements: PaymentRequirements;
-}
-
 export async function verifyRoute(req: Request, res: Response): Promise<void> {
-  const { paymentPayload, paymentRequirements } = req.body as VerifyRequest;
+  const { x402Version, paymentHeader, paymentRequirements } = req.body as FacilitatorRequest;
 
   console.log("[/verify] Received request:", {
-    paymentPayload: JSON.stringify(paymentPayload).slice(0, 200),
+    x402Version,
+    paymentHeader: paymentHeader?.slice(0, 100) + "...",
     paymentRequirements: JSON.stringify(paymentRequirements).slice(0, 200),
   });
 
-  // Handle mock/legacy payloads for backward compatibility
-  if (!paymentPayload?.payload || !paymentPayload?.network) {
-    console.log("[/verify] Mock mode - payload missing required fields");
+  // Validate request x402Version
+  if (x402Version !== 1) {
     const response: VerifyResponse = {
-      isValid: true,
-      invalidReason: null,
-      payer: "mock-payer",
+      isValid: false,
+      invalidReason: `Unsupported request x402Version: ${x402Version}`,
     };
     res.json(response);
     return;
   }
+
+  // Validate paymentHeader exists
+  if (!paymentHeader) {
+    const response: VerifyResponse = {
+      isValid: false,
+      invalidReason: "paymentHeader is required",
+    };
+    res.json(response);
+    return;
+  }
+
+  // Decode and validate the paymentHeader (base64 -> JSON -> validate fields)
+  const validation = decodeAndValidatePaymentHeader(paymentHeader);
+  if (!validation.valid) {
+    console.log("[/verify] Validation failed:", validation.error);
+    const response: VerifyResponse = {
+      isValid: false,
+      invalidReason: validation.error,
+    };
+    res.json(response);
+    return;
+  }
+
+  const paymentPayload = validation.payload;
+  console.log("[/verify] Decoded payload:", {
+    x402Version: paymentPayload.x402Version,
+    scheme: paymentPayload.scheme,
+    network: paymentPayload.network,
+  });
 
   try {
     // Use real Stellar verification
@@ -37,7 +61,6 @@ export async function verifyRoute(req: Request, res: Response): Promise<void> {
     const response: VerifyResponse = {
       isValid: false,
       invalidReason: error instanceof Error ? error.message : "Verification failed",
-      payer: paymentPayload?.payload?.sourceAccount || "unknown",
     };
     res.json(response);
   }

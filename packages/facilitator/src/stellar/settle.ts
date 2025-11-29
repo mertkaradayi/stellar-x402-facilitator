@@ -29,9 +29,8 @@ export async function settleStellarPayment(
     return {
       success: false,
       error: `Unsupported network: ${network}`,
-      transaction: "",
-      network,
-      payer: sourceAccount,
+      txHash: null,
+      networkId: network,
     };
   }
 
@@ -65,9 +64,8 @@ export async function settleStellarPayment(
         return {
           success: true,
           error: null,
-          transaction: result.hash,
-          network,
-          payer: sourceAccount,
+          txHash: result.hash,
+          networkId: network,
         };
       } else {
         // Submit the transaction as-is (client pays fees)
@@ -78,9 +76,8 @@ export async function settleStellarPayment(
         return {
           success: true,
           error: null,
-          transaction: result.hash,
-          network,
-          payer: sourceAccount,
+          txHash: result.hash,
+          networkId: network,
         };
       }
     } catch (error) {
@@ -100,9 +97,8 @@ export async function settleStellarPayment(
       return {
         success: false,
         error: errorMessage,
-        transaction: "",
-        network,
-        payer: sourceAccount,
+        txHash: null,
+        networkId: network,
       };
     }
   }
@@ -114,9 +110,8 @@ export async function settleStellarPayment(
     return {
       success: true,
       error: null,
-      transaction: `mock-stellar-tx-${Date.now()}`,
-      network,
-      payer: sourceAccount,
+      txHash: `mock-stellar-tx-${Date.now()}`,
+      networkId: network,
     };
   }
 
@@ -125,9 +120,8 @@ export async function settleStellarPayment(
     return {
       success: false,
       error: "Facilitator key not configured for fee sponsorship",
-      transaction: "",
-      network,
-      payer: sourceAccount,
+      txHash: null,
+      networkId: network,
     };
   }
 
@@ -163,18 +157,15 @@ export async function settleStellarPayment(
     return {
       success: false,
       error: "Direct settlement without client signature not implemented",
-      transaction: "",
-      network,
-      payer: sourceAccount,
+      txHash: null,
+      networkId: network,
     };
   } catch (error) {
     return {
       success: false,
       error: `Settlement error: ${error instanceof Error ? error.message : "unknown error"}`,
-      transaction: "",
-      network,
-      payer: sourceAccount,
+      txHash: null,
+      networkId: network,
     };
   }
 }
-
