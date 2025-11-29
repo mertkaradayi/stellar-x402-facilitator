@@ -169,16 +169,22 @@ asset: "native"
 
 ### Amount Units
 
-Amounts are always in **base units** (stroops for XLM-like assets):
+Stellar uses **fixed 7 decimal places for ALL assets** (XLM, USDC, any token).
+The smallest unit is called a "stroop" = 0.0000001 of any asset.
 
-| Asset Type | Decimals | Example | Human Readable |
-|------------|----------|---------|----------------|
-| XLM | 7 | `10000000` | 1 XLM |
-| USDC | 6 | `1000000` | 1 USDC |
+| Amount (stroops) | Human Readable | Notes |
+|------------------|----------------|-------|
+| `10000000` | 1.0 | 1 XLM, 1 USDC, 1 of any asset |
+| `1000000` | 0.1 | 0.1 of any asset |
+| `100000` | 0.01 | |
+| `1` | 0.0000001 | Smallest possible amount |
 
 ```typescript
-maxAmountRequired: "1000000" // 0.1 USDC or 0.1 XLM
+// All assets use the same 7-decimal precision
+maxAmountRequired: "1000000" // 0.1 of any asset (XLM, USDC, etc.)
 ```
+
+> **Note:** This is a hard-coded limit on Stellar - all amounts are signed 64-bit integers scaled by 10^7.
 
 ### Payload Structure
 

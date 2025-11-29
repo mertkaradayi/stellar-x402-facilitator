@@ -148,10 +148,11 @@ export async function buildPaymentTransactionXdr(
       .setTimeout(300)
       .build();
   } else {
-    // Soroban token transfer (USDC)
-    // For now, use a simpler approach - native XLM converted
+    // Soroban token transfer (e.g., USDC)
+    // All Stellar assets use 7 decimals - same as native XLM
+    // For now, fallback to native XLM
     // TODO: Full Soroban token support
-    const xlmAmount = (Number(amount) / 1_000_000).toFixed(7); // USDC has 6 decimals
+    const xlmAmount = (Number(amount) / 10_000_000).toFixed(7);
     
     transaction = new Stellar.TransactionBuilder(account, {
       fee: "100000",

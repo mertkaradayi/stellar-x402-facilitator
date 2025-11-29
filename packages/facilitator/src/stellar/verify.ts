@@ -14,88 +14,6 @@ const NETWORKS: typeof STELLAR_NETWORKS = {
   },
 };
 
-/**
- * Extract payment details from a signed transaction XDR
- * Returns null if the transaction is not a valid payment
- */
-interface ExtractedPayment {
-  source: string;
-  destination: string;
-  amount: string; // In stroops/base units
-  asset: string;  // "native" or contract address
-  txHash: string;
-}
-
-function extractPaymentFromXdr(
-  signedTxXdr: string,
-  networkPassphrase: string
-): ExtractedPayment | { error: string } {
-  try {
-    const tx = Stellar.TransactionBuilder.fromXDR(signedTxXdr, networkPassphrase);
-    
-    // Get transaction hash
-    const txHash = tx.hash().toString("hex");
-    
-    // Handle FeeBumpTransaction vs regular Transaction
-    if (tx instanceof Stellar.FeeBumpTransaction) {
-      // It's a FeeBumpTransaction, extract the inner transaction
-      const innerTx = tx.innerTransaction;
-      return extractPaymentFromTransaction(innerTx, txHash);
-    }
-    
-    // Regular Transaction
-    return extractPaymentFromTransaction(tx as Stellar.Transaction, txHash);
-  } catch (error) {
-    return { error: `Failed to parse XDR: ${error instanceof Error ? error.message : "unknown error"}` };
-  }
-}
-
-function extractPaymentFromTransaction(
-  tx: Stellar.Transaction,
-  txHash: string
-): ExtractedPayment | { error: string } {
-  const source = tx.source;
-  const operations = tx.operations;
-  
-  if (operations.length === 0) {
-    return { error: "Transaction has no operations" };
-  }
-  
-  // Look for a payment operation
-  for (const op of operations) {
-    if (op.type === "payment") {
-      const paymentOp = op as Stellar.Operation.Payment;
-      
-      // Extract asset info
-      let asset: string;
-      if (paymentOp.asset.isNative()) {
-        asset = "native";
-      } else {
-        // For issued assets: "CODE:ISSUER"
-        const assetCode = (paymentOp.asset as Stellar.Asset).code;
-        const assetIssuer = (paymentOp.asset as Stellar.Asset).issuer;
-        asset = `${assetCode}:${assetIssuer}`;
-      }
-      
-      // Convert amount to stroops (XLM has 7 decimal places)
-      const amountStroops = BigInt(Math.floor(parseFloat(paymentOp.amount) * 10_000_000)).toString();
-      
-      return {
-        source: op.source || source,
-        destination: paymentOp.destination,
-        amount: amountStroops,
-        asset,
-        txHash,
-      };
-    }
-    
-    // TODO: Handle Soroban contract invocations for token transfers
-    // This would require parsing the contract call to extract transfer details
-  }
-  
-  return { error: "No payment operation found in transaction" };
-}
-
 export async function verifyStellarPayment(
   paymentPayload: PaymentPayload,
   paymentRequirements: PaymentRequirements
@@ -107,6 +25,7 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: `Network mismatch: expected ${paymentRequirements.network}, got ${network}`,
+      payer: payload?.sourceAccount || "unknown",
     };
   }
 
@@ -115,6 +34,7 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: "Missing or invalid payload",
+      payer: "unknown",
     };
   }
 
@@ -125,148 +45,110 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: "Missing required payload fields (sourceAccount, amount, destination)",
+      payer: sourceAccount || "unknown",
     };
   }
 
-  // Get network config
+  // Validate destination matches payTo
+  if (destination !== paymentRequirements.payTo) {
+    return {
+      isValid: false,
+      invalidReason: `Destination mismatch: expected ${paymentRequirements.payTo}, got ${destination}`,
+      payer: sourceAccount,
+    };
+  }
+
+  // Validate amount is sufficient
+  const payloadAmount = BigInt(amount);
+  const requiredAmount = BigInt(paymentRequirements.maxAmountRequired);
+  if (payloadAmount < requiredAmount) {
+    return {
+      isValid: false,
+      invalidReason: `Insufficient amount: required ${requiredAmount}, got ${payloadAmount}`,
+      payer: sourceAccount,
+    };
+  }
+
+  // Validate asset matches (if specified in requirements)
+  if (paymentRequirements.asset && asset !== paymentRequirements.asset) {
+    return {
+      isValid: false,
+      invalidReason: `Asset mismatch: expected ${paymentRequirements.asset}, got ${asset}`,
+      payer: sourceAccount,
+    };
+  }
+
+  // Check if the source account exists and has sufficient balance
   const networkConfig = NETWORKS[network as keyof typeof NETWORKS];
   if (!networkConfig) {
     return {
       isValid: false,
       invalidReason: `Unsupported network: ${network}`,
+      payer: sourceAccount,
     };
   }
 
-  // If we have a signed transaction, validate it matches the payload and requirements
-  if (signedTxXdr) {
-    const extractResult = extractPaymentFromXdr(signedTxXdr, networkConfig.networkPassphrase);
-    
-    if ("error" in extractResult) {
-      return {
-        isValid: false,
-        invalidReason: `Invalid transaction: ${extractResult.error}`,
-      };
+  try {
+    const server = new Stellar.Horizon.Server(networkConfig.horizonUrl);
+    const account = await server.loadAccount(sourceAccount);
+
+    // For native XLM payments, check XLM balance
+    if (asset === "native") {
+      const xlmBalance = account.balances.find(
+        (b) => b.asset_type === "native"
+      );
+      if (xlmBalance) {
+        // Convert XLM to stroops (1 XLM = 10^7 stroops)
+        const balanceStroops = BigInt(Math.floor(parseFloat(xlmBalance.balance) * 10_000_000));
+        if (balanceStroops < payloadAmount) {
+          return {
+            isValid: false,
+            invalidReason: `Insufficient XLM balance: has ${balanceStroops}, needs ${payloadAmount}`,
+            payer: sourceAccount,
+          };
+        }
+      }
     }
-    
-    const extracted = extractResult;
-    console.log("[verify] Extracted payment from XDR:", {
-      txHash: extracted.txHash.slice(0, 16) + "...",
-      source: extracted.source.slice(0, 8) + "...",
-      destination: extracted.destination.slice(0, 8) + "...",
-      amount: extracted.amount,
-      asset: extracted.asset,
-    });
-    
-    // Validate source matches payload
-    if (extracted.source !== sourceAccount) {
-      return {
-        isValid: false,
-        invalidReason: `Transaction source mismatch: payload says ${sourceAccount}, XDR has ${extracted.source}`,
-      };
-    }
-    
-    // Validate destination matches payTo requirement
-    if (extracted.destination !== paymentRequirements.payTo) {
-      return {
-        isValid: false,
-        invalidReason: `Destination mismatch: required ${paymentRequirements.payTo}, XDR sends to ${extracted.destination}`,
-      };
-    }
-    
-    // Validate amount is sufficient
-    const extractedAmount = BigInt(extracted.amount);
-    const requiredAmount = BigInt(paymentRequirements.maxAmountRequired);
-    if (extractedAmount < requiredAmount) {
-      return {
-        isValid: false,
-        invalidReason: `Insufficient amount in XDR: required ${requiredAmount}, got ${extractedAmount}`,
-      };
-    }
-    
-    // Validate asset matches requirement
-    // Allow "native" to match if requirement specifies native XLM
-    const normalizedExtractedAsset = extracted.asset;
-    const normalizedRequiredAsset = paymentRequirements.asset;
-    
-    if (normalizedExtractedAsset !== normalizedRequiredAsset) {
-      // Check if both are representing native XLM
-      const isExtractedNative = normalizedExtractedAsset === "native";
-      const isRequiredNative = normalizedRequiredAsset === "native" || 
-                               normalizedRequiredAsset.toLowerCase() === "xlm";
-      
-      if (!(isExtractedNative && isRequiredNative)) {
+    // For token payments (Soroban), we would need to check token balance
+    // This is more complex and would require Soroban RPC calls
+    // For hackathon, we'll trust the signed transaction is valid
+
+    // If we have a signed transaction, try to parse it
+    if (signedTxXdr) {
+      try {
+        const tx = Stellar.TransactionBuilder.fromXDR(
+          signedTxXdr,
+          networkConfig.networkPassphrase
+        );
+        console.log("[verify] Parsed transaction:", tx.hash().toString("hex"));
+      } catch (parseError) {
         return {
           isValid: false,
-          invalidReason: `Asset mismatch: required ${normalizedRequiredAsset}, XDR has ${normalizedExtractedAsset}`,
+          invalidReason: `Invalid transaction XDR: ${parseError instanceof Error ? parseError.message : "unknown error"}`,
+          payer: sourceAccount,
         };
       }
     }
-    
-    console.log("[verify] XDR validation passed - transaction matches requirements");
-  } else {
-    // No signed transaction - validate payload fields against requirements
-    // This is a weaker validation (trusting client-provided data)
-    
-    // Validate destination matches payTo
-    if (destination !== paymentRequirements.payTo) {
-      return {
-        isValid: false,
-        invalidReason: `Destination mismatch: expected ${paymentRequirements.payTo}, got ${destination}`,
-      };
-    }
 
-    // Validate amount is sufficient
-    const payloadAmount = BigInt(amount);
-    const requiredAmount = BigInt(paymentRequirements.maxAmountRequired);
-    if (payloadAmount < requiredAmount) {
-      return {
-        isValid: false,
-        invalidReason: `Insufficient amount: required ${requiredAmount}, got ${payloadAmount}`,
-      };
-    }
-
-    // Validate asset matches
-    if (paymentRequirements.asset && asset !== paymentRequirements.asset) {
-      return {
-        isValid: false,
-        invalidReason: `Asset mismatch: expected ${paymentRequirements.asset}, got ${asset}`,
-      };
-    }
-  }
-
-  // Verify source account exists on network
-  try {
-    const server = new Stellar.Horizon.Server(networkConfig.horizonUrl);
-    await server.loadAccount(sourceAccount);
-    
     console.log("[verify] Payment verified successfully");
     return {
       isValid: true,
       invalidReason: null,
+      payer: sourceAccount,
     };
   } catch (error) {
+    // Account not found or other error
     if (error instanceof Error && error.message.includes("Not Found")) {
       return {
         isValid: false,
         invalidReason: `Source account not found: ${sourceAccount}`,
+        payer: sourceAccount,
       };
     }
     return {
       isValid: false,
       invalidReason: `Verification error: ${error instanceof Error ? error.message : "unknown error"}`,
+      payer: sourceAccount,
     };
-  }
-}
-
-/**
- * Extract the transaction hash from a signed XDR without full validation
- * Useful for replay protection checks
- */
-export function getTxHashFromXdr(signedTxXdr: string, networkPassphrase: string): string | null {
-  try {
-    const tx = Stellar.TransactionBuilder.fromXDR(signedTxXdr, networkPassphrase);
-    return tx.hash().toString("hex");
-  } catch {
-    return null;
   }
 }

@@ -163,8 +163,9 @@ export default function Home() {
   }, [wallet, connectWallet, signTransaction]);
 
   const formatAmount = (stroops: string) => {
-    const amount = Number(stroops) / 1_000_000;
-    return `${amount.toFixed(2)} XLM`;
+    // All Stellar assets use 7 decimals (1 unit = 10^7 stroops)
+    const amount = Number(stroops) / 10_000_000;
+    return `${amount.toFixed(2)}`;
   };
 
   const truncateAddress = (addr: string) => {

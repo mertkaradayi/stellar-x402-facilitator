@@ -19,7 +19,7 @@ export interface StellarPayload {
   signedTxXdr: string;
   // Source account (payer's public key)
   sourceAccount: string;
-  // Amount in stroops (1 XLM = 10^7 stroops, 1 USDC = 10^6 units)
+  // Amount in stroops (all Stellar assets use 7 decimals: 1 unit = 10^7 stroops)
   amount: string;
   // Destination account (payTo address)
   destination: string;

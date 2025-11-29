@@ -6,7 +6,7 @@ const FACILITATOR_URL = process.env.FACILITATOR_URL || "http://localhost:4022";
 const PAYMENT_CONFIG = {
   payTo: process.env.PAY_TO_ADDRESS || "GC63PSERYMUUUJKYSSFQ7FKRAU5UPIP3XUC6X7DLMZUB7SSCPW5BSIRT",
   asset: process.env.ASSET_CONTRACT || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
-  maxAmountRequired: "100000", // 0.1 USDC (6 decimals) - small amount for testing
+  maxAmountRequired: "1000000", // 0.1 of any asset (all Stellar assets use 7 decimals)
   network: "stellar-testnet" as const,
 };
 

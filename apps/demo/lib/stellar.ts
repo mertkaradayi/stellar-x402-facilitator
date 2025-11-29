@@ -8,7 +8,7 @@ const SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";
 export interface PaymentParams {
   sourceAccount: string;
   destination: string;
-  amount: string; // In atomic units (stroops for XLM, 6 decimals for USDC)
+  amount: string; // In stroops (all Stellar assets use 7 decimals)
   asset: string; // Contract address or "native"
 }
 

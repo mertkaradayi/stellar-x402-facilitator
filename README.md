@@ -181,17 +181,30 @@ Execute a verified payment on the Stellar network.
 
 ## Configuration
 
-Create `.env` files as needed (optional - defaults work):
+Copy the example environment file and customize:
+
+```bash
+cp env.example .env
+```
+
+Key settings:
 
 ```env
-# Facilitator (packages/facilitator/.env)
+# Server port
 PORT=4022
-FACILITATOR_SECRET_KEY=S...  # Optional: for fee sponsorship
 
-# Demo (apps/demo/.env)
-FACILITATOR_URL=http://localhost:4022
-PAY_TO_ADDRESS=G...  # Your receiving wallet
+# Fee sponsorship: set this to pay user fees via fee-bump
+# Generate at: https://laboratory.stellar.org/#account-creator?network=test
+FACILITATOR_SECRET_KEY=S...
+
+# Your Stellar address that receives payments
+PAY_TO_ADDRESS=G...
+
+# Asset: "native" for XLM, or contract address for tokens
+ASSET_CONTRACT=native
 ```
+
+See `env.example` for full documentation and production checklist.
 
 ## Testing
 
