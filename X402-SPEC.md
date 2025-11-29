@@ -264,9 +264,17 @@ Prevents the same payment from being used multiple times.
 
 - In-memory cache stores `(txHash, resource)` pairs
 - `/verify` checks if transaction already used → returns `isValid: false`
-- `/settle` is **idempotent**: same tx returns cached result
+- `/settle` **should be idempotent**: same tx returns cached result (⚠️ **Currently not implemented**)
 
-### Behavior
+### Current Implementation Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `/verify` replay check | ✅ Implemented | Uses `hasTransactionBeenUsed()` |
+| `/settle` idempotency | ⏳ Pending | Should use `getCachedSettlement()` before submitting |
+| Mark as settled | ⏳ Pending | Should call `markPaymentAsSettled()` after success |
+
+### Intended Behavior (Per Spec)
 
 | Scenario | /verify | /settle |
 |----------|---------|---------|

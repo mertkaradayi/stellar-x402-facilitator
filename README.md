@@ -64,7 +64,7 @@ This implementation follows the [Coinbase x402 specification](https://github.com
 | Facilitator /supported | ✅ |
 | Base64 Encoding | ✅ |
 | XDR Validation | ✅ |
-| Replay Protection | ✅ |
+| Replay Protection | ⚠️ |
 | Fee Sponsorship (Fee-bump) | ✅ |
 
 See [COMPATIBILITY.md](./COMPATIBILITY.md) and [X402-SPEC.md](./X402-SPEC.md) for full details.
@@ -227,7 +227,7 @@ curl http://localhost:4022/supported
 | Feature | Status | Description |
 |---------|--------|-------------|
 | XDR Validation | ✅ | Parses signed transactions to verify payment details |
-| Replay Protection | ✅ | Prevents double-spending (in-memory, resets on restart) |
+| Replay Protection | ⚠️ | Partially implemented: `/verify` checks for duplicates, `/settle` needs idempotency |
 | Fee Sponsorship | ✅ | Optional fee-bump via `FACILITATOR_SECRET_KEY` |
 | USDC Soroban Token | ⏳ | Using native XLM for now |
 | Persistent Replay Store | ⏳ | Use Redis/PostgreSQL for production |

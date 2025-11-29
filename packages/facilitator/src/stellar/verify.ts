@@ -25,7 +25,6 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: `Network mismatch: expected ${paymentRequirements.network}, got ${network}`,
-      payer: payload?.sourceAccount || "unknown",
     };
   }
 
@@ -34,7 +33,6 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: "Missing or invalid payload",
-      payer: "unknown",
     };
   }
 
@@ -45,7 +43,6 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: "Missing required payload fields (sourceAccount, amount, destination)",
-      payer: sourceAccount || "unknown",
     };
   }
 
@@ -54,7 +51,6 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: `Destination mismatch: expected ${paymentRequirements.payTo}, got ${destination}`,
-      payer: sourceAccount,
     };
   }
 
@@ -65,7 +61,6 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: `Insufficient amount: required ${requiredAmount}, got ${payloadAmount}`,
-      payer: sourceAccount,
     };
   }
 
@@ -74,7 +69,6 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: `Asset mismatch: expected ${paymentRequirements.asset}, got ${asset}`,
-      payer: sourceAccount,
     };
   }
 
@@ -84,7 +78,6 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: `Unsupported network: ${network}`,
-      payer: sourceAccount,
     };
   }
 
@@ -98,13 +91,12 @@ export async function verifyStellarPayment(
         (b) => b.asset_type === "native"
       );
       if (xlmBalance) {
-        // Convert XLM to stroops (1 XLM = 10^7 stroops)
+        // Convert to stroops (all Stellar assets use 7 decimals: 1 unit = 10^7 stroops)
         const balanceStroops = BigInt(Math.floor(parseFloat(xlmBalance.balance) * 10_000_000));
         if (balanceStroops < payloadAmount) {
           return {
             isValid: false,
             invalidReason: `Insufficient XLM balance: has ${balanceStroops}, needs ${payloadAmount}`,
-            payer: sourceAccount,
           };
         }
       }
@@ -125,7 +117,6 @@ export async function verifyStellarPayment(
         return {
           isValid: false,
           invalidReason: `Invalid transaction XDR: ${parseError instanceof Error ? parseError.message : "unknown error"}`,
-          payer: sourceAccount,
         };
       }
     }
@@ -134,7 +125,6 @@ export async function verifyStellarPayment(
     return {
       isValid: true,
       invalidReason: null,
-      payer: sourceAccount,
     };
   } catch (error) {
     // Account not found or other error
@@ -142,13 +132,24 @@ export async function verifyStellarPayment(
       return {
         isValid: false,
         invalidReason: `Source account not found: ${sourceAccount}`,
-        payer: sourceAccount,
       };
     }
     return {
       isValid: false,
       invalidReason: `Verification error: ${error instanceof Error ? error.message : "unknown error"}`,
-      payer: sourceAccount,
     };
+  }
+}
+
+/**
+ * Extract the transaction hash from a signed XDR without full validation
+ * Useful for replay protection checks
+ */
+export function getTxHashFromXdr(signedTxXdr: string, networkPassphrase: string): string | null {
+  try {
+    const tx = Stellar.TransactionBuilder.fromXDR(signedTxXdr, networkPassphrase);
+    return tx.hash().toString("hex");
+  } catch {
+    return null;
   }
 }

@@ -1,6 +1,6 @@
 # Future Enhancements
 
-## Current State: ✅ Core Features Complete
+## Current State: ✅ Core Features Complete (with minor gaps)
 
 The Stellar x402 Facilitator is fully functional with:
 - Real Stellar testnet transactions
@@ -8,7 +8,7 @@ The Stellar x402 Facilitator is fully functional with:
 - Coinbase x402 V1 spec compliance
 - Working demo application
 - **XDR transaction validation**
-- **Replay protection (in-memory)**
+- **Replay protection (partial: `/verify` only)**
 - **Fee sponsorship (fee-bump transactions)**
 
 ---
@@ -50,12 +50,18 @@ Transactions that don't match requirements are **rejected**.
 
 ---
 
-### ✅ Replay Protection
-**Status:** ✅ Implemented (In-memory)
+### ⚠️ Replay Protection
+**Status:** ⚠️ Partially Implemented (In-memory)
 
-Prevents double-spending:
-- `/verify` rejects already-used transactions
-- `/settle` is idempotent (same tx returns cached result)
+Current state:
+- ✅ `/verify` rejects already-used transactions
+- ⏳ `/settle` idempotency not yet implemented (should return cached result for same tx)
+- ⏳ Transactions not marked as settled after successful settlement
+
+**Next Steps:**
+- Add idempotency check in `/settle` route (check cache before submitting)
+- Mark transactions as settled after successful settlement
+- Use `getCachedSettlement()` and `markPaymentAsSettled()` from replay-protection module
 
 ---
 
