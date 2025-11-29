@@ -1,5 +1,45 @@
 // x402 Protocol Types for Stellar
 
+// ============================================================================
+// Error Codes (matching Coinbase x402 spec pattern)
+// ============================================================================
+
+export const StellarErrorReasons = [
+  // Generic x402 errors (from Coinbase spec)
+  "insufficient_funds",
+  "invalid_network",
+  "invalid_payload",
+  "invalid_payment_requirements",
+  "invalid_scheme",
+  "invalid_payment",
+  "payment_expired",
+  "unsupported_scheme",
+  "invalid_x402_version",
+  "invalid_transaction_state",
+  "unexpected_settle_error",
+  "unexpected_verify_error",
+  // Stellar-specific errors (following Coinbase naming pattern: invalid_exact_{network}_payload_*)
+  "invalid_exact_stellar_payload_missing_signed_tx_xdr",
+  "invalid_exact_stellar_payload_invalid_xdr",
+  "invalid_exact_stellar_payload_source_account_not_found",
+  "invalid_exact_stellar_payload_insufficient_balance",
+  "invalid_exact_stellar_payload_amount_mismatch",
+  "invalid_exact_stellar_payload_destination_mismatch",
+  "invalid_exact_stellar_payload_asset_mismatch",
+  "invalid_exact_stellar_payload_network_mismatch",
+  "invalid_exact_stellar_payload_missing_required_fields",
+  "invalid_exact_stellar_payload_transaction_expired",
+  "invalid_exact_stellar_payload_transaction_already_used",
+  "settle_exact_stellar_transaction_failed",
+  "settle_exact_stellar_fee_bump_failed",
+] as const;
+
+export type StellarErrorReason = (typeof StellarErrorReasons)[number];
+
+// ============================================================================
+// PaymentRequirements (per x402 spec section 5.1.2)
+// ============================================================================
+
 export interface PaymentRequirements {
   scheme: "exact";
   network: "stellar-testnet" | "stellar";
@@ -7,11 +47,11 @@ export interface PaymentRequirements {
   resource: string;
   description: string;
   mimeType: string;
-  outputSchema?: object | null; // Only this field is optional per spec
+  outputSchema?: Record<string, unknown> | null; // Optional per spec
   payTo: string;
   maxTimeoutSeconds: number;
   asset: string;
-  extra: object | null; // Required but can be null
+  extra?: Record<string, unknown> | null; // Optional per Coinbase spec
 }
 
 export interface StellarPayload {

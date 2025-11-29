@@ -1,5 +1,5 @@
 import * as Stellar from "@stellar/stellar-sdk";
-import type { PaymentPayload, PaymentRequirements, SettleResponse, STELLAR_NETWORKS } from "../types.js";
+import type { PaymentPayload, PaymentRequirements, SettleResponse, STELLAR_NETWORKS, StellarErrorReason } from "../types.js";
 
 const NETWORKS: typeof STELLAR_NETWORKS = {
   "stellar-testnet": {
@@ -19,7 +19,7 @@ const FACILITATOR_SECRET_KEY = process.env.FACILITATOR_SECRET_KEY;
 
 /**
  * Submit a Stellar payment with optional fee sponsorship (fee-bump)
- * 
+ *
  * Trust-minimized guarantees:
  * - Client's signed transaction is NEVER modified
  * - Only fee payer changes when using fee-bump
@@ -37,7 +37,7 @@ export async function settleStellarPayment(
   if (!networkConfig) {
     return {
       success: false,
-      errorReason: `Unsupported network: ${network}`,
+      errorReason: "invalid_network" as StellarErrorReason,
       payer,
       transaction: "",
       network,
@@ -48,7 +48,7 @@ export async function settleStellarPayment(
   if (!signedTxXdr) {
     return {
       success: false,
-      errorReason: "signedTxXdr is required for settlement",
+      errorReason: "invalid_exact_stellar_payload_missing_signed_tx_xdr" as StellarErrorReason,
       payer,
       transaction: "",
       network,
@@ -58,14 +58,14 @@ export async function settleStellarPayment(
   // Parse the transaction
   let tx: Stellar.Transaction | Stellar.FeeBumpTransaction;
   let txHash: string;
-  
+
   try {
     tx = Stellar.TransactionBuilder.fromXDR(signedTxXdr, networkConfig.networkPassphrase);
     txHash = tx.hash().toString("hex");
   } catch (error) {
     return {
       success: false,
-      errorReason: `Invalid transaction XDR: ${error instanceof Error ? error.message : "unknown error"}`,
+      errorReason: "invalid_exact_stellar_payload_invalid_xdr" as StellarErrorReason,
       payer,
       transaction: "",
       network,
@@ -81,38 +81,47 @@ export async function settleStellarPayment(
     // This wraps the client's transaction WITHOUT modifying it
     if (FACILITATOR_SECRET_KEY) {
       const facilitatorKeypair = Stellar.Keypair.fromSecret(FACILITATOR_SECRET_KEY);
-      
+
       // Get the inner transaction for fee-bump
       // If tx is already a FeeBumpTransaction, extract the inner
-      const innerTx = tx instanceof Stellar.FeeBumpTransaction 
-        ? tx.innerTransaction 
-        : tx as Stellar.Transaction;
-      
+      const innerTx =
+        tx instanceof Stellar.FeeBumpTransaction ? tx.innerTransaction : (tx as Stellar.Transaction);
+
       // Build fee-bump transaction
       // Per Stellar docs: inner transaction is UNCHANGED, only fee payer is different
-      const feeBumpTx = Stellar.TransactionBuilder.buildFeeBumpTransaction(
-        facilitatorKeypair,
-        "1000000", // Max fee in stroops (0.1 XLM)
-        innerTx,
-        networkConfig.networkPassphrase
-      );
-      feeBumpTx.sign(facilitatorKeypair);
+      try {
+        const feeBumpTx = Stellar.TransactionBuilder.buildFeeBumpTransaction(
+          facilitatorKeypair,
+          "1000000", // Max fee in stroops (0.1 XLM)
+          innerTx,
+          networkConfig.networkPassphrase
+        );
+        feeBumpTx.sign(facilitatorKeypair);
 
-      console.log(`[settle] Submitting fee-bumped transaction...`);
-      console.log(`[settle] Inner tx hash: ${innerTx.hash().toString("hex").slice(0, 16)}...`);
-      console.log(`[settle] Fee-bump tx hash: ${feeBumpTx.hash().toString("hex").slice(0, 16)}...`);
-      
-      const result = await server.submitTransaction(feeBumpTx);
-      submittedTxHash = result.hash;
-      console.log(`[settle] Transaction successful: ${submittedTxHash}`);
+        console.log(`[settle] Submitting fee-bumped transaction...`);
+        console.log(`[settle] Inner tx hash: ${innerTx.hash().toString("hex").slice(0, 16)}...`);
+        console.log(`[settle] Fee-bump tx hash: ${feeBumpTx.hash().toString("hex").slice(0, 16)}...`);
+
+        const result = await server.submitTransaction(feeBumpTx);
+        submittedTxHash = result.hash;
+        console.log(`[settle] Transaction successful: ${submittedTxHash}`);
+      } catch (feeBumpError) {
+        console.error("[settle] Fee-bump failed:", feeBumpError);
+        return {
+          success: false,
+          errorReason: "settle_exact_stellar_fee_bump_failed" as StellarErrorReason,
+          payer,
+          transaction: "",
+          network,
+        };
+      }
     } else {
       // Submit client's transaction directly (client pays fees)
       console.log(`[settle] Submitting client-signed transaction: ${txHash.slice(0, 16)}...`);
-      
-      const txToSubmit = tx instanceof Stellar.FeeBumpTransaction 
-        ? tx 
-        : tx as Stellar.Transaction;
-      
+
+      const txToSubmit =
+        tx instanceof Stellar.FeeBumpTransaction ? tx : (tx as Stellar.Transaction);
+
       const result = await server.submitTransaction(txToSubmit);
       submittedTxHash = result.hash;
       console.log(`[settle] Transaction successful: ${submittedTxHash}`);
@@ -126,38 +135,33 @@ export async function settleStellarPayment(
     };
   } catch (error) {
     console.error("[settle] Transaction failed:", error);
-    
-    // Extract detailed error info from Stellar Horizon
-    let errorMessage = "Transaction failed";
+
+    // Extract detailed error info from Stellar Horizon for logging
     if (error instanceof Error) {
-      errorMessage = error.message;
-      
-      // Check for Horizon error extras with result codes
-      const horizonError = error as { 
-        response?: { 
-          data?: { 
-            extras?: { 
-              result_codes?: { 
+      const horizonError = error as {
+        response?: {
+          data?: {
+            extras?: {
+              result_codes?: {
                 transaction?: string;
                 operations?: string[];
-              } 
-            } 
-          } 
-        } 
+              };
+            };
+          };
+        };
       };
-      
+
       const resultCodes = horizonError.response?.data?.extras?.result_codes;
       if (resultCodes) {
-        errorMessage += ` - Transaction: ${resultCodes.transaction || "unknown"}`;
-        if (resultCodes.operations?.length) {
-          errorMessage += `, Operations: ${resultCodes.operations.join(", ")}`;
-        }
+        console.error(
+          `[settle] Horizon result codes - Transaction: ${resultCodes.transaction || "unknown"}, Operations: ${resultCodes.operations?.join(", ") || "none"}`
+        );
       }
     }
 
     return {
       success: false,
-      errorReason: errorMessage,
+      errorReason: "settle_exact_stellar_transaction_failed" as StellarErrorReason,
       payer,
       transaction: "",
       network,

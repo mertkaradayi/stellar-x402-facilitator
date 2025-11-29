@@ -18,14 +18,19 @@ app.get("/health", (_req, res) => {
 });
 
 // x402 /supported endpoint - declares supported (scheme, network) combinations
-// Per x402 spec: each kind must include x402Version, scheme, network
+// Per x402 spec: each kind must include x402Version, scheme, network, and optional extra
 app.get("/supported", (_req, res) => {
   res.json({
-    kinds: SUPPORTED_KINDS.map(k => ({ 
-      x402Version: k.x402Version, 
-      scheme: k.scheme, 
-      network: k.network 
-    }))
+    kinds: SUPPORTED_KINDS.map((k) => ({
+      x402Version: k.x402Version,
+      scheme: k.scheme,
+      network: k.network,
+      // Extra field for Stellar-specific metadata (like SVM uses feePayer)
+      extra: {
+        // Indicates if the facilitator can sponsor transaction fees
+        feeSponsorship: !!process.env.FACILITATOR_SECRET_KEY,
+      },
+    })),
   });
 });
 

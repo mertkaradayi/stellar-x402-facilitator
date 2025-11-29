@@ -1,5 +1,5 @@
 import * as Stellar from "@stellar/stellar-sdk";
-import type { PaymentPayload, PaymentRequirements, VerifyResponse, STELLAR_NETWORKS } from "../types.js";
+import type { PaymentPayload, PaymentRequirements, VerifyResponse, STELLAR_NETWORKS, StellarErrorReason } from "../types.js";
 
 const NETWORKS: typeof STELLAR_NETWORKS = {
   "stellar-testnet": {
@@ -25,7 +25,7 @@ export async function verifyStellarPayment(
   if (network !== paymentRequirements.network) {
     return {
       isValid: false,
-      invalidReason: `Network mismatch: expected ${paymentRequirements.network}, got ${network}`,
+      invalidReason: "invalid_exact_stellar_payload_network_mismatch" as StellarErrorReason,
       payer,
     };
   }
@@ -34,7 +34,7 @@ export async function verifyStellarPayment(
   if (!payload || typeof payload !== "object") {
     return {
       isValid: false,
-      invalidReason: "Missing or invalid payload",
+      invalidReason: "invalid_payload" as StellarErrorReason,
     };
   }
 
@@ -44,7 +44,7 @@ export async function verifyStellarPayment(
   if (!sourceAccount || !amount || !destination) {
     return {
       isValid: false,
-      invalidReason: "Missing required payload fields (sourceAccount, amount, destination)",
+      invalidReason: "invalid_exact_stellar_payload_missing_required_fields" as StellarErrorReason,
       payer,
     };
   }
@@ -53,7 +53,7 @@ export async function verifyStellarPayment(
   if (destination !== paymentRequirements.payTo) {
     return {
       isValid: false,
-      invalidReason: `Destination mismatch: expected ${paymentRequirements.payTo}, got ${destination}`,
+      invalidReason: "invalid_exact_stellar_payload_destination_mismatch" as StellarErrorReason,
       payer,
     };
   }
@@ -64,7 +64,7 @@ export async function verifyStellarPayment(
   if (payloadAmount < requiredAmount) {
     return {
       isValid: false,
-      invalidReason: `Insufficient amount: required ${requiredAmount}, got ${payloadAmount}`,
+      invalidReason: "invalid_exact_stellar_payload_amount_mismatch" as StellarErrorReason,
       payer,
     };
   }
@@ -73,7 +73,7 @@ export async function verifyStellarPayment(
   if (paymentRequirements.asset && asset !== paymentRequirements.asset) {
     return {
       isValid: false,
-      invalidReason: `Asset mismatch: expected ${paymentRequirements.asset}, got ${asset}`,
+      invalidReason: "invalid_exact_stellar_payload_asset_mismatch" as StellarErrorReason,
       payer,
     };
   }
@@ -83,7 +83,7 @@ export async function verifyStellarPayment(
   if (!networkConfig) {
     return {
       isValid: false,
-      invalidReason: `Unsupported network: ${network}`,
+      invalidReason: "invalid_network" as StellarErrorReason,
       payer,
     };
   }
@@ -94,16 +94,14 @@ export async function verifyStellarPayment(
 
     // For native XLM payments, check XLM balance
     if (asset === "native") {
-      const xlmBalance = account.balances.find(
-        (b) => b.asset_type === "native"
-      );
+      const xlmBalance = account.balances.find((b) => b.asset_type === "native");
       if (xlmBalance) {
         // Convert to stroops (all Stellar assets use 7 decimals: 1 unit = 10^7 stroops)
         const balanceStroops = BigInt(Math.floor(parseFloat(xlmBalance.balance) * 10_000_000));
         if (balanceStroops < payloadAmount) {
           return {
             isValid: false,
-            invalidReason: `Insufficient XLM balance: has ${balanceStroops}, needs ${payloadAmount}`,
+            invalidReason: "insufficient_funds" as StellarErrorReason,
             payer,
           };
         }
@@ -116,15 +114,12 @@ export async function verifyStellarPayment(
     // If we have a signed transaction, try to parse it
     if (signedTxXdr) {
       try {
-        const tx = Stellar.TransactionBuilder.fromXDR(
-          signedTxXdr,
-          networkConfig.networkPassphrase
-        );
+        const tx = Stellar.TransactionBuilder.fromXDR(signedTxXdr, networkConfig.networkPassphrase);
         console.log("[verify] Parsed transaction:", tx.hash().toString("hex"));
       } catch (parseError) {
         return {
           isValid: false,
-          invalidReason: `Invalid transaction XDR: ${parseError instanceof Error ? parseError.message : "unknown error"}`,
+          invalidReason: "invalid_exact_stellar_payload_invalid_xdr" as StellarErrorReason,
           payer,
         };
       }
@@ -140,13 +135,13 @@ export async function verifyStellarPayment(
     if (error instanceof Error && error.message.includes("Not Found")) {
       return {
         isValid: false,
-        invalidReason: `Source account not found: ${sourceAccount}`,
+        invalidReason: "invalid_exact_stellar_payload_source_account_not_found" as StellarErrorReason,
         payer,
       };
     }
     return {
       isValid: false,
-      invalidReason: `Verification error: ${error instanceof Error ? error.message : "unknown error"}`,
+      invalidReason: "unexpected_verify_error" as StellarErrorReason,
       payer,
     };
   }
