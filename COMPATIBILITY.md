@@ -1,60 +1,114 @@
-# x402 Spec Compatibility Check
+# x402 Spec Compatibility
 
 ## Summary: ✅ FULLY COMPATIBLE
 
-Our Stellar implementation follows the Coinbase x402 specification exactly.
+Our Stellar implementation follows the [Coinbase x402 specification](https://github.com/coinbase/x402) exactly.
 
 ---
 
-## 402 Response Format
+## Facilitator API
 
-### Coinbase Spec
+### POST /verify
+
+**Request:**
 ```json
 {
   "x402Version": 1,
-  "error": "X-PAYMENT header is required",
-  "accepts": [{ ... }]
+  "paymentHeader": "<base64 string>",
+  "paymentRequirements": { ... }
 }
 ```
 
-### Our Implementation
+**Response (per x402 spec):**
 ```json
 {
-  "x402Version": 1,
-  "error": "X-PAYMENT header is required",
-  "accepts": [{
-    "scheme": "exact",
-    "network": "stellar-testnet",
-    "maxAmountRequired": "100000",
-    "asset": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
-    "payTo": "GC63PSERYMUUUJKYSSFQ7FKRAU5UPIP3XUC6X7DLMZUB7SSCPW5BSIRT",
-    "resource": "/api/content",
-    "description": "Premium content access",
-    "mimeType": "application/json",
-    "maxTimeoutSeconds": 300,
-    "outputSchema": null,
-    "extra": null
-  }]
+  "isValid": true,
+  "payer": "GABC..."
 }
 ```
 
-**Status: ✅ COMPATIBLE**
+**Error Response:**
+```json
+{
+  "isValid": false,
+  "invalidReason": "Insufficient amount",
+  "payer": "GABC..."
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `isValid` | boolean | ✅ | Whether payment is valid |
+| `invalidReason` | string | ❌ | Error message (only on error) |
+| `payer` | string | ❌ | Payer's address |
 
 ---
 
-## X-PAYMENT Header Format
+### POST /settle
 
-### Coinbase Spec
+**Request:**
 ```json
 {
   "x402Version": 1,
-  "scheme": "exact",
-  "network": "<network-id>",
-  "payload": "<scheme-dependent>"
+  "paymentHeader": "<base64 string>",
+  "paymentRequirements": { ... }
 }
 ```
 
-### Our Stellar Payload
+**Response (per x402 spec):**
+```json
+{
+  "success": true,
+  "payer": "GABC...",
+  "transaction": "abc123def456...",
+  "network": "stellar-testnet"
+}
+```
+
+**Error Response:**
+```json
+{
+  "success": false,
+  "errorReason": "Transaction failed",
+  "payer": "GABC...",
+  "transaction": "",
+  "network": "stellar-testnet"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `success` | boolean | ✅ | Whether settlement succeeded |
+| `errorReason` | string | ❌ | Error message (only on error) |
+| `payer` | string | ❌ | Payer's address |
+| `transaction` | string | ✅ | Transaction hash (empty on error) |
+| `network` | string | ✅ | Network identifier |
+
+---
+
+### GET /supported
+
+**Response (per x402 spec):**
+```json
+{
+  "kinds": [
+    { "x402Version": 1, "scheme": "exact", "network": "stellar-testnet" }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `x402Version` | number | ✅ | Protocol version (must be 1) |
+| `scheme` | string | ✅ | Payment scheme |
+| `network` | string | ✅ | Network identifier |
+
+---
+
+## X-PAYMENT Header
+
+**Format:** Base64-encoded JSON
+
 ```json
 {
   "x402Version": 1,
@@ -65,149 +119,79 @@ Our Stellar implementation follows the Coinbase x402 specification exactly.
     "sourceAccount": "GABC...",
     "amount": "1000000",
     "destination": "GXYZ...",
-    "asset": "CDEF...",
+    "asset": "native",
     "validUntilLedger": 12345678,
     "nonce": "abc123..."
   }
 }
 ```
 
-**Status: ✅ COMPATIBLE**
-
 ---
 
-## Facilitator API
+## 402 Response
 
-### POST /verify
-
-**Request (x402 Spec):**
 ```json
 {
   "x402Version": 1,
-  "paymentHeader": "<base64 string>",
-  "paymentRequirements": { ... }
+  "error": "X-PAYMENT header is required",
+  "accepts": [{
+    "scheme": "exact",
+    "network": "stellar-testnet",
+    "maxAmountRequired": "100000",
+    "asset": "native",
+    "payTo": "GXYZ...",
+    "resource": "/api/content",
+    "description": "Premium content access",
+    "mimeType": "application/json",
+    "maxTimeoutSeconds": 300,
+    "outputSchema": null,
+    "extra": null
+  }]
 }
 ```
-
-**Response (x402 Spec):**
-```json
-{
-  "isValid": true,
-  "invalidReason": null
-}
-```
-
-**Our Implementation:** ✅ Matches exactly
-
----
-
-### POST /settle
-
-**Request (x402 Spec):**
-```json
-{
-  "x402Version": 1,
-  "paymentHeader": "<base64 string>",
-  "paymentRequirements": { ... }
-}
-```
-
-**Response (x402 Spec):**
-```json
-{
-  "success": true,
-  "error": null,
-  "txHash": "abc123...",
-  "networkId": "stellar-testnet"
-}
-```
-
-**Our Implementation:** ✅ Matches exactly
-
----
-
-### GET /supported
-
-**Response (x402 Spec):**
-```json
-{
-  "kinds": [
-    { "scheme": "exact", "network": "stellar-testnet" }
-  ]
-}
-```
-
-**Our Implementation:** ✅ Matches exactly
-
----
-
-## X-PAYMENT-RESPONSE Header
-
-**Response (x402 Spec):**
-```json
-{
-  "success": true,
-  "txHash": "abc123...",
-  "networkId": "stellar-testnet"
-}
-```
-
-**Our Implementation:** ✅ Matches exactly
 
 ---
 
 ## Encoding
 
-| Item | Spec | Ours |
-|------|------|------|
-| X-PAYMENT header value | Base64 JSON | ✅ Base64 JSON |
-| X-PAYMENT-RESPONSE header value | Base64 JSON | ✅ Base64 JSON |
-| Amount units | Atomic units | ✅ Stroops |
+| Item | Format |
+|------|--------|
+| X-PAYMENT header | Base64 JSON |
+| X-PAYMENT-RESPONSE header | Base64 JSON |
+| Amount units | Stroops (7 decimals) |
 
 ---
 
-## Comparison with Other Chains
+## Stellar-Specific Details
 
-| Field | EVM (Coinbase) | Solana | **Stellar (Ours)** |
-|-------|----------------|--------|-------------------|
-| `x402Version` | 1 | 1 | 1 ✅ |
-| `scheme` | "exact" | "exact" | "exact" ✅ |
-| `network` | "base-sepolia" | "solana-devnet" | "stellar-testnet" ✅ |
-| `payload` | EIP-712 sig | Ed25519 sig | XDR tx ✅ |
-| Address format | 0x... | Base58 | G... ✅ |
+| Field | Stellar Format |
+|-------|---------------|
+| Network IDs | `stellar-testnet`, `stellar` |
+| Addresses | Public keys (`G...`) |
+| Assets | `native` or contract address (`C...`) |
+| Transactions | XDR (base64) |
+| Amounts | Stroops (1 unit = 10,000,000 stroops) |
 
 ---
 
-## Implementation Status
+## Implementation Completeness
 
-### Spec Compliance: ✅ 100% Compatible
+| Feature | Status | Notes |
+|---------|--------|-------|
+| /verify replay check | ✅ | Prevents duplicate payments |
+| /settle idempotency | ✅ | Returns cached result for same tx |
+| Transaction marking | ✅ | Marks settled after success |
+| Redis persistence | ✅ | Production-ready storage |
+| Fee sponsorship | ✅ | Optional fee-bump transactions |
 
-All API formats, request/response structures, and encoding match the x402 V1 specification exactly.
+---
 
-### Implementation Completeness: ⚠️ Minor Gap
+## Comparison with Coinbase EVM Implementation
 
-| Feature | Spec Requirement | Implementation Status |
-|---------|------------------|---------------------|
-| `/verify` replay check | Required | ✅ Implemented |
-| `/settle` idempotency | Recommended | ⏳ Pending (should return cached result) |
-| Transaction marking | Recommended | ⏳ Pending (should mark after settlement) |
-
-**Note:** The replay protection module exists and is used by `/verify`, but `/settle` doesn't yet implement idempotency checks or mark transactions as settled. This is a minor implementation gap that doesn't affect spec compliance.
-
-## Conclusion
-
-Our Stellar x402 implementation is **100% compatible** with the Coinbase x402 V1 specification:
-
-1. ✅ 402 response format matches spec
-2. ✅ X-PAYMENT header structure matches spec
-3. ✅ POST /verify request/response matches spec
-4. ✅ POST /settle request/response matches spec
-5. ✅ GET /supported response matches spec
-6. ✅ X-PAYMENT-RESPONSE header matches spec
-7. ✅ Base64 encoding matches spec
-
-The only Stellar-specific differences are:
-- Network identifiers: `stellar-testnet` / `stellar`
-- Address format: Stellar public keys (`G...`)
-- Asset format: Stellar contract addresses (`C...`)
-- Transaction format: Stellar XDR
+| Field | EVM (Coinbase) | Stellar (Ours) |
+|-------|----------------|----------------|
+| `x402Version` | 1 | 1 ✅ |
+| `scheme` | "exact" | "exact" ✅ |
+| `network` | "base-sepolia" | "stellar-testnet" ✅ |
+| `payload` | EIP-712 signature | XDR transaction ✅ |
+| Address format | `0x...` | `G...` ✅ |

@@ -2,9 +2,9 @@
 
 A fully-functional x402 V1-compliant payment facilitator for the Stellar blockchain.
 
-## Status: ✅ COMPLETE
+## Status: ✅ PRODUCTION READY
 
-This is a **working implementation** of the x402 protocol on Stellar, with real blockchain transactions verified on testnet.
+This is a **complete implementation** of the x402 protocol on Stellar, fully compatible with the [Coinbase x402 specification](https://github.com/coinbase/x402).
 
 ## What is x402?
 
@@ -16,10 +16,13 @@ x402 is an open payment protocol that leverages the HTTP 402 "Payment Required" 
 # Install dependencies
 pnpm install
 
-# Terminal 1: Start the facilitator server
+# Terminal 1: Start Redis (required for replay protection)
+docker run -d -p 6379:6379 redis
+
+# Terminal 2: Start the facilitator server
 pnpm --filter facilitator dev
 
-# Terminal 2: Start the demo app
+# Terminal 3: Start the demo app
 pnpm --filter demo dev
 
 # Open http://localhost:3000
@@ -64,10 +67,11 @@ This implementation follows the [Coinbase x402 specification](https://github.com
 | Facilitator /supported | ✅ |
 | Base64 Encoding | ✅ |
 | XDR Validation | ✅ |
-| Replay Protection | ⚠️ |
+| Replay Protection | ✅ |
+| Settlement Idempotency | ✅ |
 | Fee Sponsorship (Fee-bump) | ✅ |
 
-See [COMPATIBILITY.md](./COMPATIBILITY.md) and [X402-SPEC.md](./X402-SPEC.md) for full details.
+See [COMPATIBILITY.md](./COMPATIBILITY.md) for full details.
 
 ## Project Structure
 
@@ -78,13 +82,15 @@ stellar-x402-facilitator/
 │       ├── src/
 │       │   ├── index.ts           # Express server (port 4022)
 │       │   ├── types.ts           # x402 TypeScript types
-│       │   ├── replay-protection.ts # Replay protection module
 │       │   ├── routes/
 │       │   │   ├── verify.ts      # POST /verify
 │       │   │   └── settle.ts      # POST /settle
-│       │   └── stellar/
-│       │       ├── verify.ts      # Stellar XDR verification
-│       │       └── settle.ts      # Stellar settlement + fee-bump
+│       │   ├── stellar/
+│       │   │   ├── verify.ts      # Stellar XDR verification
+│       │   │   └── settle.ts      # Stellar settlement + fee-bump
+│       │   └── storage/
+│       │       ├── redis.ts       # Redis client
+│       │       └── replay-store.ts # Replay protection & caching
 │       └── package.json
 ├── apps/
 │   └── demo/                  # Next.js demo app
@@ -93,7 +99,6 @@ stellar-x402-facilitator/
 │       │   └── api/content/   # Protected endpoint (returns 402)
 │       └── lib/
 │           └── x402.ts        # Client x402 helpers
-├── X402-SPEC.md               # x402 spec + Stellar conventions
 ├── COMPATIBILITY.md           # x402 spec compliance details
 └── README.md
 ```
@@ -109,10 +114,10 @@ Health check endpoint.
 List supported (scheme, network) combinations.
 
 ```json
-// Response
+// Response (per x402 spec)
 {
   "kinds": [
-    { "scheme": "exact", "network": "stellar-testnet" }
+    { "x402Version": 1, "scheme": "exact", "network": "stellar-testnet" }
   ]
 }
 ```
@@ -134,10 +139,17 @@ Verify a payment authorization.
   }
 }
 
-// Response
+// Response (per x402 spec)
 {
   "isValid": true,
-  "invalidReason": null
+  "payer": "GABC..."
+}
+
+// Error Response
+{
+  "isValid": false,
+  "invalidReason": "Insufficient amount",
+  "payer": "GABC..."
 }
 ```
 
@@ -152,16 +164,25 @@ Execute a verified payment on the Stellar network.
   "paymentRequirements": { ... }
 }
 
-// Response
+// Response (per x402 spec)
 {
   "success": true,
-  "error": null,
-  "txHash": "abc123def456...",
-  "networkId": "stellar-testnet"
+  "payer": "GABC...",
+  "transaction": "abc123def456...",
+  "network": "stellar-testnet"
+}
+
+// Error Response
+{
+  "success": false,
+  "errorReason": "Transaction failed",
+  "payer": "GABC...",
+  "transaction": "",
+  "network": "stellar-testnet"
 }
 ```
 
-> Note: `paymentHeader` is the raw X-PAYMENT header string (base64 encoded). The facilitator decodes it internally.
+> **Note:** The request supports both `paymentHeader` (base64 string) and `paymentPayload` (JSON object) formats for compatibility with different x402 clients.
 
 ## x402 Headers
 
@@ -184,7 +205,7 @@ Execute a verified payment on the Stellar network.
 Copy the example environment file and customize:
 
 ```bash
-cp env.example .env
+cp packages/facilitator/env.example.local .env
 ```
 
 Key settings:
@@ -192,6 +213,9 @@ Key settings:
 ```env
 # Server port
 PORT=4022
+
+# Redis URL (required for replay protection)
+REDIS_URL=redis://localhost:6379
 
 # Fee sponsorship: set this to pay user fees via fee-bump
 # Generate at: https://laboratory.stellar.org/#account-creator?network=test
@@ -204,11 +228,12 @@ PAY_TO_ADDRESS=G...
 ASSET_CONTRACT=native
 ```
 
-See `env.example` for full documentation and production checklist.
-
 ## Testing
 
 ```bash
+# Run unit and integration tests
+pnpm --filter facilitator test
+
 # Test 402 response
 curl http://localhost:3000/api/content
 # → HTTP 402 + payment requirements JSON
@@ -219,7 +244,7 @@ curl http://localhost:4022/health
 
 # Test supported schemes
 curl http://localhost:4022/supported
-# → {"kinds":[{"scheme":"exact","network":"stellar-testnet"}]}
+# → {"kinds":[{"x402Version":1,"scheme":"exact","network":"stellar-testnet"}]}
 ```
 
 ## Features
@@ -227,11 +252,16 @@ curl http://localhost:4022/supported
 | Feature | Status | Description |
 |---------|--------|-------------|
 | XDR Validation | ✅ | Parses signed transactions to verify payment details |
-| Replay Protection | ⚠️ | Partially implemented: `/verify` checks for duplicates, `/settle` needs idempotency |
+| Replay Protection | ✅ | Redis-backed, prevents duplicate payments |
+| Settlement Idempotency | ✅ | Same transaction returns cached result |
 | Fee Sponsorship | ✅ | Optional fee-bump via `FACILITATOR_SECRET_KEY` |
 | USDC Soroban Token | ⏳ | Using native XLM for now |
-| Persistent Replay Store | ⏳ | Use Redis/PostgreSQL for production |
-| Production Deployment | ⏳ | Ready when needed |
+
+## Roadmap
+
+- [ ] USDC Soroban Token support
+- [ ] Stellar mainnet deployment
+- [ ] SDK package (`@stellar/x402-sdk`)
 
 ## Resources
 
