@@ -7,12 +7,15 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "check-balance": "tsx src/scripts/check-balance.ts"
+    "check-balance": "tsx src/scripts/check-balance.ts",
+    "test-redis": "tsx src/scripts/test-redis.ts"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^13.1.0",
     "cors": "^2.8.5",
-    "express": "^4.21.0"
+    "dotenv": "^17.2.3",
+    "express": "^4.21.0",
+    "redis": "^4.7.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
@@ -22,6 +25,3 @@
     "typescript": "^5.3.3"
   }
 }
-
-
-
