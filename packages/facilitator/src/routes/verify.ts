@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import type { FacilitatorRequest, VerifyResponse } from "../types.js";
-import { decodeAndValidatePaymentHeader } from "../types.js";
-import { verifyStellarPayment } from "../stellar/verify.js";
+import { decodeAndValidatePaymentHeader, STELLAR_NETWORKS } from "../types.js";
+import { verifyStellarPayment, getTxHashFromXdr } from "../stellar/verify.js";
+import { hasTransactionBeenUsed } from "../replay-protection.js";
 
 export async function verifyRoute(req: Request, res: Response): Promise<void> {
   const { x402Version, paymentHeader, paymentRequirements } = req.body as FacilitatorRequest;
@@ -32,6 +33,16 @@ export async function verifyRoute(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  // Validate paymentRequirements exists
+  if (!paymentRequirements) {
+    const response: VerifyResponse = {
+      isValid: false,
+      invalidReason: "paymentRequirements is required",
+    };
+    res.json(response);
+    return;
+  }
+
   // Decode and validate the paymentHeader (base64 -> JSON -> validate fields)
   const validation = decodeAndValidatePaymentHeader(paymentHeader);
   if (!validation.valid) {
@@ -50,6 +61,24 @@ export async function verifyRoute(req: Request, res: Response): Promise<void> {
     scheme: paymentPayload.scheme,
     network: paymentPayload.network,
   });
+
+  // Replay protection: Check if this transaction has already been used
+  const signedTxXdr = paymentPayload.payload?.signedTxXdr;
+  if (signedTxXdr) {
+    const networkConfig = STELLAR_NETWORKS[paymentPayload.network as keyof typeof STELLAR_NETWORKS];
+    if (networkConfig) {
+      const txHash = getTxHashFromXdr(signedTxXdr, networkConfig.networkPassphrase);
+      if (txHash && hasTransactionBeenUsed(txHash)) {
+        console.log(`[/verify] Transaction ${txHash.slice(0, 16)}... already used`);
+        const response: VerifyResponse = {
+          isValid: false,
+          invalidReason: "Transaction has already been used for a previous payment",
+        };
+        res.json(response);
+        return;
+      }
+    }
+  }
 
   try {
     // Use real Stellar verification

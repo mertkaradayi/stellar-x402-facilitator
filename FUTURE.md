@@ -1,12 +1,61 @@
 # Future Enhancements
 
-## Current State: ✅ MVP Complete
+## Current State: ✅ Core Features Complete
 
 The Stellar x402 Facilitator is fully functional with:
 - Real Stellar testnet transactions
 - Freighter wallet integration
 - Coinbase x402 V1 spec compliance
 - Working demo application
+- **XDR transaction validation**
+- **Replay protection (in-memory)**
+- **Fee sponsorship (fee-bump transactions)**
+
+---
+
+## Completed Features
+
+### ✅ Fee Sponsorship (Fee-bump Transactions)
+**Status:** ✅ Implemented
+
+The facilitator can pay transaction fees on behalf of users when `FACILITATOR_SECRET_KEY` is set:
+
+```typescript
+// Fee-bump wraps user's transaction without modifying it
+const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
+  facilitatorKeypair,  // Facilitator pays fees
+  "1000000",           // Max fee in stroops
+  userSignedTx,        // User's inner transaction (unchanged)
+  networkPassphrase
+);
+```
+
+**Benefits:**
+- Users don't need to hold XLM for fees
+- Better onboarding experience
+- Inner transaction integrity preserved
+
+---
+
+### ✅ XDR Transaction Validation
+**Status:** ✅ Implemented
+
+The facilitator parses signed XDR transactions and validates:
+- Payment destination matches `payTo`
+- Payment amount >= `maxAmountRequired`
+- Payment asset matches required `asset`
+- Transaction signature is valid
+
+Transactions that don't match requirements are **rejected**.
+
+---
+
+### ✅ Replay Protection
+**Status:** ✅ Implemented (In-memory)
+
+Prevents double-spending:
+- `/verify` rejects already-used transactions
+- `/settle` is idempotent (same tx returns cached result)
 
 ---
 
@@ -16,8 +65,7 @@ The Stellar x402 Facilitator is fully functional with:
 **Status:** ⏳ Planned  
 **Current:** Using native XLM for payments
 
-The current implementation uses native XLM transfers for simplicity. Adding USDC support requires:
-
+Adding USDC support requires:
 - Soroban contract interactions
 - Token authorization (SEP-41)
 - Contract simulation before settlement
@@ -36,53 +84,25 @@ const tx = new TransactionBuilder(account)
 
 ---
 
-### 2. Fee Sponsorship (Fee-bump Transactions)
+### 2. Persistent Replay Protection
 **Status:** ⏳ Planned  
-**Current:** Users pay their own transaction fees
+**Current:** In-memory storage (resets on restart)
 
-Fee sponsorship allows the facilitator to pay transaction fees on behalf of users, improving UX:
-
-```typescript
-// Future: Fee-bump transaction
-import { TransactionBuilder } from "@stellar/stellar-sdk";
-
-const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
-  facilitatorKeypair,  // Facilitator pays fees
-  "1000000",           // Max fee in stroops
-  userSignedTx,        // User's inner transaction
-  networkPassphrase
-);
-feeBumpTx.sign(facilitatorKeypair);
-await server.submitTransaction(feeBumpTx);
-```
-
-**Benefits:**
-- Users don't need to hold XLM for fees
-- Better onboarding experience
-- Facilitator can control fee spending
-
-**Resources:**
-- [Fee-bump Transactions Guide](https://developers.stellar.org/docs/build/guides/transactions/fee-bump-transactions)
-
----
-
-### 3. `/supported` Endpoint
-**Status:** ⏳ Optional per x402 spec
-
-Add endpoint to list supported payment schemes and networks:
+For production, replace in-memory Map with:
+- Redis (fast, simple)
+- PostgreSQL (durable, queryable)
 
 ```typescript
-// GET /supported
-{
-  "x402Version": 1,
-  "schemes": ["exact"],
-  "networks": ["stellar-testnet", "stellar"]
-}
+// Future: Redis-backed replay protection
+import { createClient } from "redis";
+
+const redis = createClient();
+await redis.set(`settled:${txHash}`, JSON.stringify(result), { EX: 86400 });
 ```
 
 ---
 
-### 4. Production Deployment
+### 3. Production Deployment
 **Status:** ⏳ Ready when needed
 
 Deployment checklist:
@@ -94,10 +114,11 @@ Deployment checklist:
 - [ ] Configure HTTPS
 - [ ] Deploy facilitator to cloud (Railway, Vercel, etc.)
 - [ ] Deploy demo app
+- [ ] Persistent replay protection storage
 
 ---
 
-### 5. SDK Package
+### 4. SDK Package
 **Status:** 💡 Idea
 
 Extract client-side helpers into a standalone npm package:
@@ -115,6 +136,3 @@ const response = await fetchWithX402(url, { provider });
 ## Contributing
 
 Ideas and PRs welcome! Open an issue to discuss new features.
-
-
-

@@ -150,22 +150,123 @@ The spec does not define the exact shape, but typical usage:
 
 ---
 
-## Our Stellar Implementation Notes
+## Stellar Implementation ("exact" scheme)
 
-For Stellar, the scheme-dependent `payload` contains:
+### Asset Encoding
+
+All assets are represented by their Soroban contract address (starts with `C...`):
+
+```typescript
+// USDC on testnet
+asset: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+
+// Wrapped XLM (if using Soroban)
+asset: "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA"
+
+// Native XLM (classic payments)
+asset: "native"
+```
+
+### Amount Units
+
+Amounts are always in **base units** (stroops for XLM-like assets):
+
+| Asset Type | Decimals | Example | Human Readable |
+|------------|----------|---------|----------------|
+| XLM | 7 | `10000000` | 1 XLM |
+| USDC | 6 | `1000000` | 1 USDC |
+
+```typescript
+maxAmountRequired: "1000000" // 0.1 USDC or 0.1 XLM
+```
+
+### Payload Structure
+
+For Stellar, the `payload` in X-PAYMENT header contains:
+
 ```typescript
 {
-  signedTxXdr: string;      // Stellar transaction XDR
-  sourceAccount: string;    // Payer's public key
-  amount: string;           // Amount in stroops
-  destination: string;      // Recipient's public key
-  asset: string;            // Asset contract or "native"
-  validUntilLedger: number;
-  nonce: string;
+  signedTxXdr: string;      // Client-signed Stellar transaction (XDR, base64)
+  sourceAccount: string;    // Payer's public key (G...)
+  amount: string;           // Amount in stroops/base units
+  destination: string;      // Recipient's public key (must match payTo)
+  asset: string;            // Contract address or "native"
+  validUntilLedger: number; // Transaction expiration ledger
+  nonce: string;            // Unique nonce for replay protection
 }
 ```
 
-Networks:
-- `stellar-testnet` - Stellar Testnet
-- `stellar` - Stellar Mainnet (future)
+### Networks
+
+| Network ID | Description | Horizon URL |
+|------------|-------------|-------------|
+| `stellar-testnet` | Stellar Testnet | https://horizon-testnet.stellar.org |
+| `stellar` | Stellar Mainnet | https://horizon.stellar.org |
+
+---
+
+## Trust-Minimized Settlement
+
+The facilitator follows these principles:
+
+### 1. Transaction Integrity
+
+- Client's signed transaction is **NEVER modified**
+- Facilitator only wraps with fee-bump (if enabled)
+- Core payment parameters are always validated:
+  - `destination === paymentRequirements.payTo`
+  - `amount >= paymentRequirements.maxAmountRequired`
+  - `asset === paymentRequirements.asset`
+
+### 2. Fee Sponsorship (Optional)
+
+When `FACILITATOR_SECRET_KEY` is set, the facilitator wraps the client's transaction in a fee-bump:
+
+```
+┌─────────────────────────────────────┐
+│ Fee-Bump Transaction                │
+│ ┌─────────────────────────────────┐ │
+│ │ Inner Transaction (unchanged)   │ │
+│ │ - Signed by client              │ │
+│ │ - Payment: client → payTo       │ │
+│ └─────────────────────────────────┘ │
+│ Fee paid by: facilitator            │
+└─────────────────────────────────────┘
+```
+
+Reference: [Stellar Fee-Bump Transactions](https://developers.stellar.org/docs/build/guides/transactions/fee-bump-transactions)
+
+### 3. XDR Validation
+
+Before settlement, the facilitator parses the signed XDR and validates:
+
+1. Transaction is well-formed
+2. Contains a payment operation
+3. Payment destination matches `payTo`
+4. Payment amount >= `maxAmountRequired`
+5. Payment asset matches required `asset`
+
+Transactions that don't match are **rejected**.
+
+---
+
+## Replay Protection
+
+Prevents the same payment from being used multiple times.
+
+### Implementation
+
+- In-memory cache stores `(txHash, resource)` pairs
+- `/verify` checks if transaction already used → returns `isValid: false`
+- `/settle` is **idempotent**: same tx returns cached result
+
+### Behavior
+
+| Scenario | /verify | /settle |
+|----------|---------|---------|
+| New transaction | `isValid: true` | Submits, caches result |
+| Already settled | `isValid: false` | Returns cached success |
+| Different resource, same tx | `isValid: false` | Rejected |
+
+> **Note:** In-memory cache resets on server restart. For production, use persistent storage (Redis, PostgreSQL).
 

@@ -63,6 +63,9 @@ This implementation follows the [Coinbase x402 specification](https://github.com
 | Facilitator /settle | ✅ |
 | Facilitator /supported | ✅ |
 | Base64 Encoding | ✅ |
+| XDR Validation | ✅ |
+| Replay Protection | ✅ |
+| Fee Sponsorship (Fee-bump) | ✅ |
 
 See [COMPATIBILITY.md](./COMPATIBILITY.md) and [X402-SPEC.md](./X402-SPEC.md) for full details.
 
@@ -73,14 +76,15 @@ stellar-x402-facilitator/
 ├── packages/
 │   └── facilitator/           # x402 Facilitator server
 │       ├── src/
-│       │   ├── index.ts       # Express server (port 4022)
-│       │   ├── types.ts       # x402 TypeScript types
+│       │   ├── index.ts           # Express server (port 4022)
+│       │   ├── types.ts           # x402 TypeScript types
+│       │   ├── replay-protection.ts # Replay protection module
 │       │   ├── routes/
-│       │   │   ├── verify.ts  # POST /verify
-│       │   │   └── settle.ts  # POST /settle
+│       │   │   ├── verify.ts      # POST /verify
+│       │   │   └── settle.ts      # POST /settle
 │       │   └── stellar/
-│       │       ├── verify.ts  # Stellar verification
-│       │       └── settle.ts  # Stellar settlement
+│       │       ├── verify.ts      # Stellar XDR verification
+│       │       └── settle.ts      # Stellar settlement + fee-bump
 │       └── package.json
 ├── apps/
 │   └── demo/                  # Next.js demo app
@@ -89,7 +93,7 @@ stellar-x402-facilitator/
 │       │   └── api/content/   # Protected endpoint (returns 402)
 │       └── lib/
 │           └── x402.ts        # Client x402 helpers
-├── X402-SPEC.md               # x402 spec reference
+├── X402-SPEC.md               # x402 spec + Stellar conventions
 ├── COMPATIBILITY.md           # x402 spec compliance details
 └── README.md
 ```
@@ -205,13 +209,16 @@ curl http://localhost:4022/supported
 # → {"kinds":[{"scheme":"exact","network":"stellar-testnet"}]}
 ```
 
-## Future Enhancements
+## Features
 
-| Feature | Status |
-|---------|--------|
-| USDC Soroban Token Support | ⏳ Using native XLM for now |
-| Fee Sponsorship (Fee-bump) | ⏳ Planned |
-| Production deployment | ⏳ Ready when needed |
+| Feature | Status | Description |
+|---------|--------|-------------|
+| XDR Validation | ✅ | Parses signed transactions to verify payment details |
+| Replay Protection | ✅ | Prevents double-spending (in-memory, resets on restart) |
+| Fee Sponsorship | ✅ | Optional fee-bump via `FACILITATOR_SECRET_KEY` |
+| USDC Soroban Token | ⏳ | Using native XLM for now |
+| Persistent Replay Store | ⏳ | Use Redis/PostgreSQL for production |
+| Production Deployment | ⏳ | Ready when needed |
 
 ## Resources
 

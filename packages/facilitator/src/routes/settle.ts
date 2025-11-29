@@ -36,6 +36,18 @@ export async function settleRoute(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  // Validate paymentRequirements exists
+  if (!paymentRequirements) {
+    const response: SettleResponse = {
+      success: false,
+      error: "paymentRequirements is required",
+      txHash: null,
+      networkId: null,
+    };
+    res.json(response);
+    return;
+  }
+
   // Decode and validate the paymentHeader (base64 -> JSON -> validate fields)
   const validation = decodeAndValidatePaymentHeader(paymentHeader);
   if (!validation.valid) {
