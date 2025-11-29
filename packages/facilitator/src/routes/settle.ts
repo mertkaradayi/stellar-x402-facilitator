@@ -8,8 +8,8 @@ export async function settleRoute(req: Request, res: Response): Promise<void> {
 
   console.log("[/settle] Received request:", {
     x402Version,
-    paymentHeader: paymentHeader?.slice(0, 100) + "...",
-    paymentRequirements: JSON.stringify(paymentRequirements).slice(0, 200),
+    paymentHeader: paymentHeader ? paymentHeader.slice(0, 100) + "..." : undefined,
+    paymentRequirements: paymentRequirements ? JSON.stringify(paymentRequirements).slice(0, 200) : undefined,
   });
 
   // Validate request x402Version

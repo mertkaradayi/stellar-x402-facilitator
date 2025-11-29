@@ -8,8 +8,8 @@ export async function verifyRoute(req: Request, res: Response): Promise<void> {
 
   console.log("[/verify] Received request:", {
     x402Version,
-    paymentHeader: paymentHeader?.slice(0, 100) + "...",
-    paymentRequirements: JSON.stringify(paymentRequirements).slice(0, 200),
+    paymentHeader: paymentHeader ? paymentHeader.slice(0, 100) + "..." : undefined,
+    paymentRequirements: paymentRequirements ? JSON.stringify(paymentRequirements).slice(0, 200) : undefined,
   });
 
   // Validate request x402Version
