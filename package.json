@@ -1,0 +1,16 @@
+{
+  "name": "stellar-x402-facilitator",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "stellar:check-balance": "pnpm --filter facilitator run check-balance"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
+
+
