@@ -1,9 +1,17 @@
+/**
+ * Settle Route Handler
+ *
+ * HTTP route handler for the /settle endpoint.
+ * Following Coinbase x402 pattern: routes stay thin, calling scheme functions.
+ */
+
 import type { Request, Response } from "express";
-import type { SettleResponse, StellarErrorReason } from "../types.js";
-import { extractPaymentPayload, STELLAR_NETWORKS } from "../types.js";
-import { SettleRequestSchema } from "../schemas.js";
-import { settleStellarPayment } from "../stellar/settle.js";
-import { getTxHashFromXdr } from "../stellar/verify.js";
+import type { SettleResponse, StellarErrorReason } from "../types/index.js";
+import { extractPaymentPayload } from "../types/index.js";
+import { SettleRequestSchema } from "../types/verify/x402Specs.js";
+import { settle } from "../schemes/exact/stellar/facilitator/index.js";
+import { getTxHashFromXdr } from "../schemes/exact/stellar/facilitator/verify.js";
+import { STELLAR_NETWORKS } from "../shared/stellar/index.js";
 import {
   hasTransactionBeenUsed,
   getCachedSettlement,
@@ -110,9 +118,9 @@ export async function settleRoute(req: Request, res: Response): Promise<void> {
     }
   }
 
-  // Step 4: Perform Stellar settlement
+  // Step 4: Perform Stellar settlement using scheme function
   try {
-    const response = await settleStellarPayment(paymentPayload, paymentRequirements);
+    const response = await settle(paymentPayload, paymentRequirements);
     console.log("[/settle] Response:", response);
 
     // If settlement succeeded, mark as settled for idempotency and replay protection

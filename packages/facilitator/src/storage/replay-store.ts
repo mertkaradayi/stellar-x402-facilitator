@@ -5,7 +5,7 @@
  * Falls back to in-memory storage if Redis is not connected.
  */
 
-import type { SettleResponse } from "../types.js";
+import type { SettleResponse } from "../types/index.js";
 import { getRedisClient, isRedisConnected } from "./redis.js";
 
 // TTL for settlement records (30 days in seconds)

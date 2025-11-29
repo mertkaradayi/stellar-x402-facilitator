@@ -1,39 +1,43 @@
-import * as Stellar from "@stellar/stellar-sdk";
-import type { PaymentPayload, PaymentRequirements, SettleResponse, STELLAR_NETWORKS, StellarErrorReason } from "../types.js";
+/**
+ * Stellar Facilitator - Settle
+ *
+ * Settles a payment by submitting the transaction to the Stellar network.
+ * Following Coinbase x402 naming convention: settle() instead of settleStellarPayment()
+ */
 
-const NETWORKS: typeof STELLAR_NETWORKS = {
-  "stellar-testnet": {
-    horizonUrl: "https://horizon-testnet.stellar.org",
-    sorobanRpcUrl: "https://soroban-testnet.stellar.org",
-    networkPassphrase: "Test SDF Network ; September 2015",
-  },
-  stellar: {
-    horizonUrl: "https://horizon.stellar.org",
-    sorobanRpcUrl: "https://soroban.stellar.org",
-    networkPassphrase: "Public Global Stellar Network ; September 2015",
-  },
-};
+import * as Stellar from "@stellar/stellar-sdk";
+import type {
+  PaymentPayload,
+  PaymentRequirements,
+  SettleResponse,
+  StellarErrorReason,
+} from "../../../../types/index.js";
+import { STELLAR_NETWORKS } from "../../../../shared/stellar/index.js";
 
 // Get facilitator secret key from environment (for fee sponsorship)
 const FACILITATOR_SECRET_KEY = process.env.FACILITATOR_SECRET_KEY;
 
 /**
- * Submit a Stellar payment with optional fee sponsorship (fee-bump)
+ * Submit a Stellar payment with optional fee sponsorship (fee-bump).
  *
  * Trust-minimized guarantees:
  * - Client's signed transaction is NEVER modified
  * - Only fee payer changes when using fee-bump
  * - Stellar's sequence number mechanism prevents replay at protocol level
+ *
+ * @param payload - The payment payload containing the signed transaction
+ * @param paymentRequirements - The payment requirements for the settlement
+ * @returns A SettleResponse indicating if the payment was settled successfully
  */
-export async function settleStellarPayment(
-  paymentPayload: PaymentPayload,
+export async function settle(
+  payload: PaymentPayload,
   _paymentRequirements: PaymentRequirements
 ): Promise<SettleResponse> {
-  const { payload, network } = paymentPayload;
-  const { signedTxXdr } = payload;
-  const payer = payload.sourceAccount;
+  const { payload: stellarPayload, network } = payload;
+  const { signedTxXdr } = stellarPayload;
+  const payer = stellarPayload.sourceAccount;
 
-  const networkConfig = NETWORKS[network as keyof typeof NETWORKS];
+  const networkConfig = STELLAR_NETWORKS[network as keyof typeof STELLAR_NETWORKS];
   if (!networkConfig) {
     return {
       success: false,
@@ -168,3 +172,4 @@ export async function settleStellarPayment(
     };
   }
 }
+

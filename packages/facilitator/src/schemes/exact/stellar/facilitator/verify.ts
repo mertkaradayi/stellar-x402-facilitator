@@ -1,25 +1,42 @@
+/**
+ * Stellar Facilitator - Verify
+ *
+ * Verifies a payment payload against the payment requirements.
+ * Following Coinbase x402 naming convention: verify() instead of verifyStellarPayment()
+ */
+
 import * as Stellar from "@stellar/stellar-sdk";
-import type { PaymentPayload, PaymentRequirements, VerifyResponse, STELLAR_NETWORKS, StellarErrorReason } from "../types.js";
+import type {
+  PaymentPayload,
+  PaymentRequirements,
+  VerifyResponse,
+  StellarErrorReason,
+} from "../../../../types/index.js";
+import { STELLAR_NETWORKS } from "../../../../shared/stellar/index.js";
+import { SCHEME } from "../../index.js";
 
-const NETWORKS: typeof STELLAR_NETWORKS = {
-  "stellar-testnet": {
-    horizonUrl: "https://horizon-testnet.stellar.org",
-    sorobanRpcUrl: "https://soroban-testnet.stellar.org",
-    networkPassphrase: "Test SDF Network ; September 2015",
-  },
-  stellar: {
-    horizonUrl: "https://horizon.stellar.org",
-    sorobanRpcUrl: "https://soroban.stellar.org",
-    networkPassphrase: "Public Global Stellar Network ; September 2015",
-  },
-};
-
-export async function verifyStellarPayment(
-  paymentPayload: PaymentPayload,
+/**
+ * Verify a payment payload against the payment requirements.
+ *
+ * @param payload - The payment payload to verify
+ * @param paymentRequirements - The payment requirements to verify against
+ * @returns A VerifyResponse indicating if the payment is valid and any invalidation reason
+ */
+export async function verify(
+  payload: PaymentPayload,
   paymentRequirements: PaymentRequirements
 ): Promise<VerifyResponse> {
-  const { payload, network } = paymentPayload;
-  const payer = payload?.sourceAccount;
+  const { payload: stellarPayload, network } = payload;
+  const payer = stellarPayload?.sourceAccount;
+
+  // Verify scheme
+  if (payload.scheme !== SCHEME || paymentRequirements.scheme !== SCHEME) {
+    return {
+      isValid: false,
+      invalidReason: "unsupported_scheme" as StellarErrorReason,
+      payer,
+    };
+  }
 
   // Validate network
   if (network !== paymentRequirements.network) {
@@ -31,14 +48,14 @@ export async function verifyStellarPayment(
   }
 
   // Validate payload structure
-  if (!payload || typeof payload !== "object") {
+  if (!stellarPayload || typeof stellarPayload !== "object") {
     return {
       isValid: false,
       invalidReason: "invalid_payload" as StellarErrorReason,
     };
   }
 
-  const { sourceAccount, amount, destination, asset, signedTxXdr } = payload;
+  const { sourceAccount, amount, destination, asset, signedTxXdr } = stellarPayload;
 
   // Check required fields
   if (!sourceAccount || !amount || !destination) {
@@ -79,7 +96,7 @@ export async function verifyStellarPayment(
   }
 
   // Check if the source account exists and has sufficient balance
-  const networkConfig = NETWORKS[network as keyof typeof NETWORKS];
+  const networkConfig = STELLAR_NETWORKS[network as keyof typeof STELLAR_NETWORKS];
   if (!networkConfig) {
     return {
       isValid: false,
@@ -109,7 +126,6 @@ export async function verifyStellarPayment(
     }
     // For token payments (Soroban), we would need to check token balance
     // This is more complex and would require Soroban RPC calls
-    // For hackathon, we'll trust the signed transaction is valid
 
     // If we have a signed transaction, try to parse it
     if (signedTxXdr) {
@@ -148,8 +164,12 @@ export async function verifyStellarPayment(
 }
 
 /**
- * Extract the transaction hash from a signed XDR without full validation
- * Useful for replay protection checks
+ * Extract the transaction hash from a signed XDR without full validation.
+ * Useful for replay protection checks.
+ *
+ * @param signedTxXdr - The signed transaction XDR
+ * @param networkPassphrase - The network passphrase
+ * @returns The transaction hash or null if parsing fails
  */
 export function getTxHashFromXdr(signedTxXdr: string, networkPassphrase: string): string | null {
   try {
@@ -159,3 +179,4 @@ export function getTxHashFromXdr(signedTxXdr: string, networkPassphrase: string)
     return null;
   }
 }
+

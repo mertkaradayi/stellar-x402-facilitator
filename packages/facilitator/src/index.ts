@@ -1,9 +1,16 @@
+/**
+ * x402 Stellar Facilitator
+ *
+ * Express server that implements the x402 facilitator interface for Stellar.
+ * Following Coinbase x402 pattern for folder structure and naming.
+ */
+
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { verifyRoute } from "./routes/verify.js";
 import { settleRoute } from "./routes/settle.js";
-import { SUPPORTED_KINDS } from "./types.js";
+import { SUPPORTED_KINDS } from "./types/index.js";
 import { connectRedis, disconnectRedis, testRedisConnection } from "./storage/redis.js";
 
 const app = express();
@@ -42,7 +49,7 @@ app.post("/settle", settleRoute);
 async function startServer() {
   // Connect to Redis
   await connectRedis();
-  
+
   // Test Redis connection
   await testRedisConnection();
 

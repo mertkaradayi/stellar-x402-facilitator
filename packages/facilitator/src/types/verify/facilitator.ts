@@ -1,4 +1,21 @@
-// x402 Protocol Types for Stellar
+/**
+ * Facilitator Types and Error Codes
+ *
+ * Following Coinbase x402 pattern: types/verify/facilitator.ts
+ */
+
+import type { z } from "zod";
+import type {
+  PaymentRequirementsSchema,
+  StellarPayloadSchema,
+  PaymentPayloadSchema,
+  FacilitatorRequestSchema,
+  VerifyResponseSchema,
+  SettleResponseSchema,
+  SupportedPaymentKindSchema,
+  SupportedPaymentKindsResponseSchema,
+  x402ResponseSchema,
+} from "./x402Specs.js";
 
 // ============================================================================
 // Error Codes (matching Coinbase x402 spec pattern)
@@ -37,99 +54,33 @@ export const StellarErrorReasons = [
 export type StellarErrorReason = (typeof StellarErrorReasons)[number];
 
 // ============================================================================
-// PaymentRequirements (per x402 spec section 5.1.2)
+// Inferred Types from Zod Schemas
 // ============================================================================
 
-export interface PaymentRequirements {
-  scheme: "exact";
-  network: "stellar-testnet" | "stellar";
-  maxAmountRequired: string;
-  resource: string;
-  description: string;
-  mimeType: string;
-  outputSchema?: Record<string, unknown> | null; // Optional per spec
-  payTo: string;
-  maxTimeoutSeconds: number;
-  asset: string;
-  extra?: Record<string, unknown> | null; // Optional per Coinbase spec
-}
+export type PaymentRequirements = z.infer<typeof PaymentRequirementsSchema>;
+export type StellarPayload = z.infer<typeof StellarPayloadSchema>;
+export type PaymentPayload = z.infer<typeof PaymentPayloadSchema>;
+export type FacilitatorRequest = z.infer<typeof FacilitatorRequestSchema>;
+export type VerifyResponse = z.infer<typeof VerifyResponseSchema>;
+export type SettleResponse = z.infer<typeof SettleResponseSchema>;
+export type SupportedPaymentKind = z.infer<typeof SupportedPaymentKindSchema>;
+export type SupportedPaymentKindsResponse = z.infer<typeof SupportedPaymentKindsResponseSchema>;
+export type x402Response = z.infer<typeof x402ResponseSchema>;
 
-export interface StellarPayload {
-  // The signed transaction envelope (XDR format, base64 encoded)
-  signedTxXdr: string;
-  // Source account (payer's public key)
-  sourceAccount: string;
-  // Amount in stroops (all Stellar assets use 7 decimals: 1 unit = 10^7 stroops)
-  amount: string;
-  // Destination account (payTo address)
-  destination: string;
-  // Asset: contract address for Soroban tokens or "native" for XLM
-  asset: string;
-  // Expiration: ledger number after which the tx is invalid
-  validUntilLedger: number;
-  // Unique nonce for replay protection
-  nonce: string;
-}
-
-// The decoded payment payload (what's inside the base64 X-PAYMENT header)
-export interface PaymentPayload {
-  x402Version: number;
-  scheme: string;
-  network: string;
-  payload: StellarPayload;
-}
-
-// x402 Spec-compliant request body for /verify and /settle
-// Supports both formats:
-// 1. paymentHeader: base64 encoded string (legacy/HTTP transport)
-// 2. paymentPayload: decoded JSON object (Coinbase useFacilitator.ts format)
-export interface FacilitatorRequest {
-  x402Version: number;
-  paymentHeader?: string; // Raw X-PAYMENT header string (base64 encoded)
-  paymentPayload?: PaymentPayload; // Decoded payment payload object
-  paymentRequirements: PaymentRequirements;
-}
-
-// x402 Spec-compliant /verify response
-// Per Coinbase x402 spec: { isValid, invalidReason?, payer? }
-export interface VerifyResponse {
-  isValid: boolean;
-  invalidReason?: string;
-  payer?: string;
-}
-
-// x402 Spec-compliant /settle response
-// Per Coinbase x402 spec: { success, errorReason?, payer?, transaction, network }
-export interface SettleResponse {
-  success: boolean;
-  errorReason?: string;
-  payer?: string;
-  transaction: string;
-  network: string;
-}
-
+// ============================================================================
 // Supported (scheme, network) combinations - must match /supported endpoint
 // Per x402 spec: each kind must include x402Version, scheme, network
+// ============================================================================
+
 export const SUPPORTED_KINDS = [
   { x402Version: 1, scheme: "exact", network: "stellar-testnet" },
   // { x402Version: 1, scheme: "exact", network: "stellar" }, // Enable when ready for mainnet
 ] as const;
 
-// Network configuration
-export const STELLAR_NETWORKS = {
-  "stellar-testnet": {
-    horizonUrl: "https://horizon-testnet.stellar.org",
-    sorobanRpcUrl: "https://soroban-testnet.stellar.org",
-    networkPassphrase: "Test SDF Network ; September 2015",
-  },
-  stellar: {
-    horizonUrl: "https://horizon.stellar.org",
-    sorobanRpcUrl: "https://soroban.stellar.org",
-    networkPassphrase: "Public Global Stellar Network ; September 2015",
-  },
-} as const;
+// ============================================================================
+// Validation Result Types
+// ============================================================================
 
-// Validation result types
 interface PaymentHeaderValidationSuccess {
   valid: true;
   payload: PaymentPayload;
@@ -142,11 +93,15 @@ interface PaymentHeaderValidationFailure {
 
 export type PaymentHeaderValidation = PaymentHeaderValidationSuccess | PaymentHeaderValidationFailure;
 
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
 /**
  * Extract and validate payment payload from either format:
  * 1. paymentHeader: base64 encoded string
  * 2. paymentPayload: decoded JSON object
- * 
+ *
  * This supports both the HTTP transport format and Coinbase's useFacilitator format.
  */
 export function extractPaymentPayload(
@@ -157,15 +112,15 @@ export function extractPaymentPayload(
   if (paymentPayload && typeof paymentPayload === "object") {
     return validatePaymentPayload(paymentPayload);
   }
-  
+
   // Fall back to paymentHeader (base64 encoded string)
   if (paymentHeader) {
     return decodeAndValidatePaymentHeader(paymentHeader);
   }
-  
-  return { 
-    valid: false, 
-    error: "Either paymentHeader or paymentPayload is required" 
+
+  return {
+    valid: false,
+    error: "Either paymentHeader or paymentPayload is required",
   };
 }
 
@@ -205,12 +160,12 @@ export function validatePaymentPayload(payload: unknown): PaymentHeaderValidatio
 
   // Validate (scheme, network) is a supported combination
   const isSupported = SUPPORTED_KINDS.some(
-    kind => kind.scheme === obj.scheme && kind.network === obj.network
+    (kind) => kind.scheme === obj.scheme && kind.network === obj.network
   );
   if (!isSupported) {
-    return { 
-      valid: false, 
-      error: `Unsupported (scheme, network) combination: (${obj.scheme}, ${obj.network})` 
+    return {
+      valid: false,
+      error: `Unsupported (scheme, network) combination: (${obj.scheme}, ${obj.network})`,
     };
   }
 
@@ -222,7 +177,7 @@ export function validatePaymentPayload(payload: unknown): PaymentHeaderValidatio
 
 /**
  * Decode and validate the paymentHeader according to x402 spec.
- * 
+ *
  * Steps:
  * 1. Base64 decode the paymentHeader string
  * 2. JSON parse the decoded string
@@ -278,12 +233,12 @@ export function decodeAndValidatePaymentHeader(paymentHeader: string): PaymentHe
 
   // Step 8: Validate (scheme, network) is a supported combination
   const isSupported = SUPPORTED_KINDS.some(
-    kind => kind.scheme === obj.scheme && kind.network === obj.network
+    (kind) => kind.scheme === obj.scheme && kind.network === obj.network
   );
   if (!isSupported) {
-    return { 
-      valid: false, 
-      error: `Unsupported (scheme, network) combination: (${obj.scheme}, ${obj.network})` 
+    return {
+      valid: false,
+      error: `Unsupported (scheme, network) combination: (${obj.scheme}, ${obj.network})`,
     };
   }
 
@@ -294,7 +249,9 @@ export function decodeAndValidatePaymentHeader(paymentHeader: string): PaymentHe
   };
 }
 
-// Legacy helper - kept for backward compatibility but prefer decodeAndValidatePaymentHeader
+/**
+ * Legacy helper - kept for backward compatibility but prefer decodeAndValidatePaymentHeader
+ */
 export function decodePaymentHeader(paymentHeader: string): PaymentPayload {
   const result = decodeAndValidatePaymentHeader(paymentHeader);
   if (!result.valid) {
@@ -302,3 +259,4 @@ export function decodePaymentHeader(paymentHeader: string): PaymentPayload {
   }
   return result.payload;
 }
+

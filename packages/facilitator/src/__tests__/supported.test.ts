@@ -51,17 +51,18 @@ describe("/supported Endpoint", () => {
       }
     });
 
-    it("should include exactly x402Version, scheme, network fields in kind objects", async () => {
+    it("should include x402Version, scheme, network, and extra fields in kind objects", async () => {
       const response = await request(app)
         .get("/supported")
         .expect(200);
 
       for (const kind of response.body.kinds) {
         const keys = Object.keys(kind);
-        expect(keys).toHaveLength(3);
+        expect(keys).toHaveLength(4);
         expect(keys).toContain("x402Version");
         expect(keys).toContain("scheme");
         expect(keys).toContain("network");
+        expect(keys).toContain("extra");
       }
     });
   });

@@ -11,7 +11,7 @@
  * - Unsupported (scheme, network) combination -> error
  */
 
-import { decodeAndValidatePaymentHeader } from "../types.js";
+import { decodeAndValidatePaymentHeader } from "../types/index.js";
 import { 
   createPaymentPayload, 
   createStellarPayload, 

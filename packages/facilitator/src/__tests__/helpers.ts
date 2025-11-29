@@ -6,7 +6,7 @@
  */
 
 import * as Stellar from "@stellar/stellar-sdk";
-import type { PaymentRequirements, StellarPayload, PaymentPayload, SettleResponse } from "../types.js";
+import type { PaymentRequirements, StellarPayload, PaymentPayload, SettleResponse } from "../types/index.js";
 
 // Test constants
 export const TEST_NETWORK = "stellar-testnet";
@@ -211,7 +211,7 @@ export async function createTestApp(): Promise<import("express").Express> {
   const cors = (await import("cors")).default;
   const { verifyRoute } = await import("../routes/verify.js");
   const { settleRoute } = await import("../routes/settle.js");
-  const { SUPPORTED_KINDS } = await import("../types.js");
+  const { SUPPORTED_KINDS } = await import("../types/index.js");
 
   const app = express();
   app.use(cors());
@@ -221,13 +221,16 @@ export async function createTestApp(): Promise<import("express").Express> {
     res.json({ status: "ok", service: "x402-stellar-facilitator" });
   });
 
-  // Per x402 spec: each kind must include x402Version, scheme, network
+  // Per x402 spec: each kind must include x402Version, scheme, network, and optional extra
   app.get("/supported", (_req, res) => {
     res.json({
       kinds: SUPPORTED_KINDS.map((k) => ({ 
         x402Version: k.x402Version, 
         scheme: k.scheme, 
-        network: k.network 
+        network: k.network,
+        extra: {
+          feeSponsorship: false,
+        },
       })),
     });
   });

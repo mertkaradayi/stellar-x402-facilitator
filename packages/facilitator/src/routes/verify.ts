@@ -1,8 +1,16 @@
+/**
+ * Verify Route Handler
+ *
+ * HTTP route handler for the /verify endpoint.
+ * Following Coinbase x402 pattern: routes stay thin, calling scheme functions.
+ */
+
 import type { Request, Response } from "express";
-import type { VerifyResponse, StellarErrorReason } from "../types.js";
-import { extractPaymentPayload, STELLAR_NETWORKS } from "../types.js";
-import { VerifyRequestSchema } from "../schemas.js";
-import { verifyStellarPayment, getTxHashFromXdr } from "../stellar/verify.js";
+import type { VerifyResponse, StellarErrorReason } from "../types/index.js";
+import { extractPaymentPayload } from "../types/index.js";
+import { VerifyRequestSchema } from "../types/verify/x402Specs.js";
+import { verify, getTxHashFromXdr } from "../schemes/exact/stellar/facilitator/index.js";
+import { STELLAR_NETWORKS } from "../shared/stellar/index.js";
 import { hasTransactionBeenUsed } from "../storage/replay-store.js";
 
 export async function verifyRoute(req: Request, res: Response): Promise<void> {
@@ -84,9 +92,9 @@ export async function verifyRoute(req: Request, res: Response): Promise<void> {
     }
   }
 
-  // Step 4: Perform Stellar-specific verification
+  // Step 4: Perform Stellar-specific verification using scheme function
   try {
-    const response = await verifyStellarPayment(paymentPayload, paymentRequirements);
+    const response = await verify(paymentPayload, paymentRequirements);
     console.log("[/verify] Response:", response);
     res.json(response);
   } catch (error) {

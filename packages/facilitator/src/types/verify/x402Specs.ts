@@ -1,6 +1,7 @@
 /**
  * Zod Schemas for x402 Protocol - Stellar Implementation
  *
+ * Following Coinbase x402 pattern: types/verify/x402Specs.ts
  * These schemas match Coinbase's x402 specification exactly,
  * with Stellar-specific types for the payload.
  */
@@ -68,7 +69,6 @@ export const PaymentRequirementsSchema = z.object({
   }),
   extra: z.record(z.any()).optional().nullable(),
 });
-export type PaymentRequirements = z.infer<typeof PaymentRequirementsSchema>;
 
 // ============================================================================
 // Stellar Payload Schema (Stellar-specific, analogous to ExactEvmPayload)
@@ -100,7 +100,6 @@ export const StellarPayloadSchema = z.object({
   // Unique nonce for replay protection
   nonce: z.string().min(1, { message: "nonce is required" }),
 });
-export type StellarPayload = z.infer<typeof StellarPayloadSchema>;
 
 // ============================================================================
 // PaymentPayload Schema (per x402 spec section 5.2)
@@ -114,7 +113,6 @@ export const PaymentPayloadSchema = z.object({
   network: StellarNetworkSchema,
   payload: StellarPayloadSchema,
 });
-export type PaymentPayload = z.infer<typeof PaymentPayloadSchema>;
 
 // ============================================================================
 // Facilitator Request Schemas (per x402 spec section 7)
@@ -133,7 +131,6 @@ export const FacilitatorRequestSchema = z
   .refine((data) => data.paymentHeader || data.paymentPayload, {
     message: "Either paymentHeader or paymentPayload is required",
   });
-export type FacilitatorRequest = z.infer<typeof FacilitatorRequestSchema>;
 
 // Alias for clarity
 export const VerifyRequestSchema = FacilitatorRequestSchema;
@@ -148,7 +145,6 @@ export const VerifyResponseSchema = z.object({
   invalidReason: z.string().optional(),
   payer: z.string().optional(),
 });
-export type VerifyResponse = z.infer<typeof VerifyResponseSchema>;
 
 export const SettleResponseSchema = z.object({
   success: z.boolean(),
@@ -157,7 +153,6 @@ export const SettleResponseSchema = z.object({
   transaction: z.string(),
   network: z.string(),
 });
-export type SettleResponse = z.infer<typeof SettleResponseSchema>;
 
 // ============================================================================
 // Supported Payment Kind Schema (per x402 spec section 7.3)
@@ -171,12 +166,10 @@ export const SupportedPaymentKindSchema = z.object({
   network: StellarNetworkSchema,
   extra: z.record(z.any()).optional(),
 });
-export type SupportedPaymentKind = z.infer<typeof SupportedPaymentKindSchema>;
 
 export const SupportedPaymentKindsResponseSchema = z.object({
   kinds: z.array(SupportedPaymentKindSchema),
 });
-export type SupportedPaymentKindsResponse = z.infer<typeof SupportedPaymentKindsResponseSchema>;
 
 // ============================================================================
 // 402 Response Schema (for HTTP 402 responses)
@@ -188,5 +181,7 @@ export const x402ResponseSchema = z.object({
   accepts: z.array(PaymentRequirementsSchema).optional(),
   payer: z.string().optional(),
 });
-export type x402Response = z.infer<typeof x402ResponseSchema>;
+
+// Export unused regex for potential external use
+export { StellarAddressRegex, StellarContractRegex, StellarAssetRegex, Base64EncodedRegex };
 
