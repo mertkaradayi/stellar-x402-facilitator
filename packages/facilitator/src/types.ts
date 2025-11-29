@@ -40,30 +40,39 @@ export interface PaymentPayload {
 }
 
 // x402 Spec-compliant request body for /verify and /settle
+// Supports both formats:
+// 1. paymentHeader: base64 encoded string (legacy/HTTP transport)
+// 2. paymentPayload: decoded JSON object (Coinbase useFacilitator.ts format)
 export interface FacilitatorRequest {
   x402Version: number;
-  paymentHeader: string; // Raw X-PAYMENT header string (base64 encoded)
+  paymentHeader?: string; // Raw X-PAYMENT header string (base64 encoded)
+  paymentPayload?: PaymentPayload; // Decoded payment payload object
   paymentRequirements: PaymentRequirements;
 }
 
 // x402 Spec-compliant /verify response
+// Per Coinbase x402 spec: { isValid, invalidReason?, payer? }
 export interface VerifyResponse {
   isValid: boolean;
-  invalidReason: string | null;
+  invalidReason?: string;
+  payer?: string;
 }
 
 // x402 Spec-compliant /settle response
+// Per Coinbase x402 spec: { success, errorReason?, payer?, transaction, network }
 export interface SettleResponse {
   success: boolean;
-  error: string | null;
-  txHash: string | null;
-  networkId: string | null;
+  errorReason?: string;
+  payer?: string;
+  transaction: string;
+  network: string;
 }
 
 // Supported (scheme, network) combinations - must match /supported endpoint
+// Per x402 spec: each kind must include x402Version, scheme, network
 export const SUPPORTED_KINDS = [
-  { scheme: "exact", network: "stellar-testnet" },
-  // { scheme: "exact", network: "stellar" }, // Enable when ready for mainnet
+  { x402Version: 1, scheme: "exact", network: "stellar-testnet" },
+  // { x402Version: 1, scheme: "exact", network: "stellar" }, // Enable when ready for mainnet
 ] as const;
 
 // Network configuration
@@ -92,6 +101,84 @@ interface PaymentHeaderValidationFailure {
 }
 
 export type PaymentHeaderValidation = PaymentHeaderValidationSuccess | PaymentHeaderValidationFailure;
+
+/**
+ * Extract and validate payment payload from either format:
+ * 1. paymentHeader: base64 encoded string
+ * 2. paymentPayload: decoded JSON object
+ * 
+ * This supports both the HTTP transport format and Coinbase's useFacilitator format.
+ */
+export function extractPaymentPayload(
+  paymentHeader?: string,
+  paymentPayload?: PaymentPayload
+): PaymentHeaderValidation {
+  // Prefer paymentPayload if provided (Coinbase format)
+  if (paymentPayload && typeof paymentPayload === "object") {
+    return validatePaymentPayload(paymentPayload);
+  }
+  
+  // Fall back to paymentHeader (base64 encoded string)
+  if (paymentHeader) {
+    return decodeAndValidatePaymentHeader(paymentHeader);
+  }
+  
+  return { 
+    valid: false, 
+    error: "Either paymentHeader or paymentPayload is required" 
+  };
+}
+
+/**
+ * Validate a decoded payment payload object
+ */
+export function validatePaymentPayload(payload: unknown): PaymentHeaderValidation {
+  // Validate it's an object
+  if (!payload || typeof payload !== "object") {
+    return { valid: false, error: "Invalid paymentPayload: expected JSON object" };
+  }
+
+  const obj = payload as Record<string, unknown>;
+
+  // Validate required field: x402Version
+  if (obj.x402Version === undefined) {
+    return { valid: false, error: "Invalid paymentPayload: missing x402Version" };
+  }
+  if (obj.x402Version !== 1) {
+    return { valid: false, error: `Invalid paymentPayload: unsupported x402Version ${obj.x402Version}` };
+  }
+
+  // Validate required field: scheme
+  if (!obj.scheme || typeof obj.scheme !== "string") {
+    return { valid: false, error: "Invalid paymentPayload: missing or invalid scheme" };
+  }
+
+  // Validate required field: network
+  if (!obj.network || typeof obj.network !== "string") {
+    return { valid: false, error: "Invalid paymentPayload: missing or invalid network" };
+  }
+
+  // Validate required field: payload
+  if (!obj.payload || typeof obj.payload !== "object") {
+    return { valid: false, error: "Invalid paymentPayload: missing or invalid payload" };
+  }
+
+  // Validate (scheme, network) is a supported combination
+  const isSupported = SUPPORTED_KINDS.some(
+    kind => kind.scheme === obj.scheme && kind.network === obj.network
+  );
+  if (!isSupported) {
+    return { 
+      valid: false, 
+      error: `Unsupported (scheme, network) combination: (${obj.scheme}, ${obj.network})` 
+    };
+  }
+
+  return {
+    valid: true,
+    payload: obj as unknown as PaymentPayload,
+  };
+}
 
 /**
  * Decode and validate the paymentHeader according to x402 spec.

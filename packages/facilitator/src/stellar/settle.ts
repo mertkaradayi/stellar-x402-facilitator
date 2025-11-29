@@ -31,14 +31,16 @@ export async function settleStellarPayment(
 ): Promise<SettleResponse> {
   const { payload, network } = paymentPayload;
   const { signedTxXdr } = payload;
+  const payer = payload.sourceAccount;
 
   const networkConfig = NETWORKS[network as keyof typeof NETWORKS];
   if (!networkConfig) {
     return {
       success: false,
-      error: `Unsupported network: ${network}`,
-      txHash: null,
-      networkId: network,
+      errorReason: `Unsupported network: ${network}`,
+      payer,
+      transaction: "",
+      network,
     };
   }
 
@@ -46,9 +48,10 @@ export async function settleStellarPayment(
   if (!signedTxXdr) {
     return {
       success: false,
-      error: "signedTxXdr is required for settlement",
-      txHash: null,
-      networkId: network,
+      errorReason: "signedTxXdr is required for settlement",
+      payer,
+      transaction: "",
+      network,
     };
   }
 
@@ -62,9 +65,10 @@ export async function settleStellarPayment(
   } catch (error) {
     return {
       success: false,
-      error: `Invalid transaction XDR: ${error instanceof Error ? error.message : "unknown error"}`,
-      txHash: null,
-      networkId: network,
+      errorReason: `Invalid transaction XDR: ${error instanceof Error ? error.message : "unknown error"}`,
+      payer,
+      transaction: "",
+      network,
     };
   }
 
@@ -116,9 +120,9 @@ export async function settleStellarPayment(
 
     return {
       success: true,
-      error: null,
-      txHash: submittedTxHash,
-      networkId: network,
+      payer,
+      transaction: submittedTxHash,
+      network,
     };
   } catch (error) {
     console.error("[settle] Transaction failed:", error);
@@ -153,10 +157,10 @@ export async function settleStellarPayment(
 
     return {
       success: false,
-      error: errorMessage,
-      txHash: null,
-      networkId: network,
+      errorReason: errorMessage,
+      payer,
+      transaction: "",
+      network,
     };
   }
 }
-

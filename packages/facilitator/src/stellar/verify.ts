@@ -19,12 +19,14 @@ export async function verifyStellarPayment(
   paymentRequirements: PaymentRequirements
 ): Promise<VerifyResponse> {
   const { payload, network } = paymentPayload;
+  const payer = payload?.sourceAccount;
 
   // Validate network
   if (network !== paymentRequirements.network) {
     return {
       isValid: false,
       invalidReason: `Network mismatch: expected ${paymentRequirements.network}, got ${network}`,
+      payer,
     };
   }
 
@@ -43,6 +45,7 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: "Missing required payload fields (sourceAccount, amount, destination)",
+      payer,
     };
   }
 
@@ -51,6 +54,7 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: `Destination mismatch: expected ${paymentRequirements.payTo}, got ${destination}`,
+      payer,
     };
   }
 
@@ -61,6 +65,7 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: `Insufficient amount: required ${requiredAmount}, got ${payloadAmount}`,
+      payer,
     };
   }
 
@@ -69,6 +74,7 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: `Asset mismatch: expected ${paymentRequirements.asset}, got ${asset}`,
+      payer,
     };
   }
 
@@ -78,6 +84,7 @@ export async function verifyStellarPayment(
     return {
       isValid: false,
       invalidReason: `Unsupported network: ${network}`,
+      payer,
     };
   }
 
@@ -97,6 +104,7 @@ export async function verifyStellarPayment(
           return {
             isValid: false,
             invalidReason: `Insufficient XLM balance: has ${balanceStroops}, needs ${payloadAmount}`,
+            payer,
           };
         }
       }
@@ -117,6 +125,7 @@ export async function verifyStellarPayment(
         return {
           isValid: false,
           invalidReason: `Invalid transaction XDR: ${parseError instanceof Error ? parseError.message : "unknown error"}`,
+          payer,
         };
       }
     }
@@ -124,7 +133,7 @@ export async function verifyStellarPayment(
     console.log("[verify] Payment verified successfully");
     return {
       isValid: true,
-      invalidReason: null,
+      payer,
     };
   } catch (error) {
     // Account not found or other error
@@ -132,11 +141,13 @@ export async function verifyStellarPayment(
       return {
         isValid: false,
         invalidReason: `Source account not found: ${sourceAccount}`,
+        payer,
       };
     }
     return {
       isValid: false,
       invalidReason: `Verification error: ${error instanceof Error ? error.message : "unknown error"}`,
+      payer,
     };
   }
 }
